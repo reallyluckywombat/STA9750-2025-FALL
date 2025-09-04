@@ -3,8 +3,7 @@ title: "STA 9750 projects and labs"
 ---
 
 ## About me
-
-reallyluckywombat is a second semester Business Analytics student hoping to learn R and soon become a Data Analyst by next year! 
+### reallyluckywombat is a second semester Business Analytics student hoping to learn R and soon become a Data Analyst by next year! 
 
 ```{r}
 #| include: false
