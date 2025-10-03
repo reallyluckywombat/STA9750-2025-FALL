@@ -249,7 +249,7 @@ Emily In Paris hit the top 10 in the most countries in its debut week. It charte
 
 # Press Releases: 
 
-# The Not So Strange Anticipation of Stranger Things Season 4
+# 1. The Not So Strange Anticipation of Stranger Things Season 4
 Fans have been on the edge of their seats since the summer of 2022, eagerly awaiting the final installment of *Stranger Things*. Still not convinced of its impact? Let’s take a look at the success of the previous seasons.
 
 ```{r}
@@ -327,7 +327,7 @@ COUNTRY_TOP_10 |>
 ```
 *Stranger Things* charted in 83 countries and held a spot in the Global Top 10 for multiple consecutive weeks. The data clearly highlights its massive global impact, with record-breaking viewership numbers  confirming its place as one of Netflix’s most successful shows. The final season will start streaming November 26th this year!
 
-# Tapping into a Billion Viewers: Netflix’s Market Opportunity in India
+# 2. Tapping into a Billion Viewers: Netflix’s Market Opportunity in India
 India is the most populous country in the world, with nearly 1.5 billion people, that’s a lot of people to entertain. With a rapidly growing digital audience and expanding streaming access, India represents a major market opportunity for Netflix.
 
 Let’s explore how Hindi-language programming has performed in Netflix’s Top 10.
@@ -405,7 +405,7 @@ GLOBAL_TOP_10|>
 *Haseen Dillruba* and *The Great Indian Kapil Show* are just two examples that highlight the rising success of Hindi Language programming for Netflix. The data makes it clear: there's a string opportunity for continued growth in Indian/Hindi Language programming. 
 
 
-# They're Going Up, Up, Up... The Top Charts: KPOP Demon Hunters
+# 3. They're Going Up, Up, Up... The Top Charts: KPOP Demon Hunters
 The original animated film KPOP Demon Hunters, directed by Maggie Kang and Chris Appelhans and starring Arden Cho, May Hong, and Ji-young Yoo, follows three K-pop idols who also battle soul-sucking demons.
 
 Within just 15 weeks of its debut, KPOP Demon Hunters has become the #1 most popular movie of all time on Netflix. Just how successful is KDH? Let’s take a look.
@@ -449,8 +449,9 @@ Insanity. KPOP Demon Hunters has topped the charts for at least 12 weeks in *83 
 
 Even if animated films or K-pop aren't your thing, the numbers might be enough to make you wonder: is this movie worth a watch? You can now stream the #1 all time top movie on Netflix. 
 
+### It’s been a record-breaking year for Netflix, with exciting new programming, a growing global presence, and the continued success of its existing shows. Who knows, 2026 might be even more groundbreaking!
 
-              
+![](https://cdn.prod.website-files.com/5ed2cdc2387b7bcba1204550/68b867f27770c3bed85b69bc_Demon%20hunters.jpg)
 
 
 
