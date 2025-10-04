@@ -93,6 +93,7 @@ The dataset is now ready to explore! Let's see what Netflix programs are chartin
 
 ### 1. How many different countries does Netflix operate in? 
 ```{r}
+#| code-fold: true
 total_country_count <- COUNTRY_TOP_10 |> 
   summarise(country_count = n_distinct(country_name)) |>
   print()
@@ -100,13 +101,6 @@ total_country_count <- COUNTRY_TOP_10 |>
 Netflix operates in `r total_country_count` different countries! 
 
 ### 2. Which non-English-language film has spent the most cumulative weeks in the global top 10? How many weeks did it spend?
-```{r}
-GLOBAL_TOP_10 |>
-  filter(category == 'Films (Non-English)') |>
-  filter(cumulative_weeks_in_top_10 == max(cumulative_weeks_in_top_10))|>
-  select(show_title, cumulative_weeks_in_top_10) |>
-  slice_max(cumulative_weeks_in_top_10)
-```
 ```{r}
 #| code-fold: true
 longest_charting_film <- GLOBAL_TOP_10 |>
@@ -129,16 +123,29 @@ longest_chart_streak <- GLOBAL_TOP_10 |>
 
 ### 3. What is the longest film (English or non-English) to have ever appeared in the Netflix global Top 10? How long is it in minutes?
 ```{r}
-GLOBAL_TOP_10 |> 
+#| code-fold: true
+show_title_3 <- GLOBAL_TOP_10 |> 
   mutate(runtime_in_minutes = round(60 * runtime)) |>
   filter(category == 'Films (English)' | category == 'Films (Non-English)') |>
-  select(category, show_title, runtime_in_minutes) |>
-  slice_max(runtime_in_minutes)
+  distinct(category,show_title, .keep_all = TRUE)|>
+  select(category,show_title, runtime_in_minutes) |>
+  slice_max(runtime_in_minutes)|>
+  pull(show_title)
+
+runtime_longest_3 <- GLOBAL_TOP_10 |> 
+  mutate(runtime_in_minutes = round(60 * runtime)) |>
+  filter(category == 'Films (English)' | category == 'Films (Non-English)') |>
+  distinct(category,show_title, .keep_all = TRUE)|>
+  select(category,show_title, runtime_in_minutes) |>
+  slice_max(runtime_in_minutes)|>
+  pull(runtime_in_minutes)
 ```
-Pushpa 2: The Rule(Reloaded Version) is the longest film to appear in the Global Top 10 chart;it is 224 minutes long. 
+`r show_title_3` is the longest film to appear 
+in the Global Top 10 chart;it is `r runtime_longest_3` minutes long.
 
 ### 4. For each of the four categories, what program has the most total hours of global viewership?
 ```{r}
+#| code-fold: true
 GLOBAL_TOP_10 |> 
   filter(category %in% c('Films (English)', 'Films (Non-English)', 'TV (Non-English)', 'TV (English)')) |>
   group_by(category, show_title) |>
@@ -150,61 +157,84 @@ GLOBAL_TOP_10 |>
 
 ### 5. Which TV show had the longest run in a country’s Top 10? How long was this run and in what country did it occur?
 ```{r}
-COUNTRY_TOP_10 |>
+#| code-fold: true
+show_title_5 <- COUNTRY_TOP_10 |>
   filter(category == 'TV') |>
   filter(cumulative_weeks_in_top_10 == max(cumulative_weeks_in_top_10)) |>
-  select(country_name, show_title, longest_run_in_weeks = cumulative_weeks_in_top_10)
+  select(country_name, show_title, longest_run_in_weeks = cumulative_weeks_in_top_10)|>
+  pull(show_title)
 
+country_5 <- COUNTRY_TOP_10 |>
+  filter(category == 'TV') |>
+  filter(cumulative_weeks_in_top_10 == max(cumulative_weeks_in_top_10)) |>
+  select(country_name, show_title, longest_run_in_weeks = cumulative_weeks_in_top_10)|>
+  pull(country_name)
+
+week_5 <- COUNTRY_TOP_10 |>
+  filter(category == 'TV') |>
+  filter(cumulative_weeks_in_top_10 == max(cumulative_weeks_in_top_10)) |>
+  select(country_name, show_title, longest_run_in_weeks = cumulative_weeks_in_top_10)|>
+  pull(longest_run_in_weeks)
 ```
-Money Heist had the longest run in a country's Top 10 chart. It lasted for 127 weeks in Pakistan.
+`r show_title_5` had the longest run in a country's Top 10 chart. It lasted for `r week_5` weeks in `r country_5`.
 
 ### 6. Netflix provides over 200 weeks of service history for all but one country in our data set. Which country is this and when did Netflix cease operations in that country?
 ```{r}
-COUNTRY_TOP_10 |>
+#| code-fold: true
+country_6 <- COUNTRY_TOP_10 |>
   group_by(country_name) |>
   summarise(week_count = n_distinct(week),
             last_week = max(week)) |>
-  filter(week_count <= 200)
+  filter(week_count <= 200)|>
+  pull(country_name)
+
+last_week_6 <- COUNTRY_TOP_10 |>
+  group_by(country_name) |>
+  summarise(week_count = n_distinct(week),
+            last_week = max(week)) |>
+  filter(week_count <= 200)|>
+  pull(last_week)
 ```
-Netflix ceased operations in Russia in February 27 of 2022. 
+Netflix ceased operations in `r country_6` in `r last_week_6`. 
 
 ### 7. What is the total viewership of the TV show Squid Game?
 ```{r}
+#| code-fold: true
 SG_total_hours <- GLOBAL_TOP_10 |>
   filter(season_title %in% c('Squid Game: Season 1', 
                             'Squid Game: Season 2',
                             'Squid Game: Season 3')) |> 
-  summarise(total_hours = sum(weekly_hours_viewed))|>
-  print()
+  summarise(total_hours = signif(sum(weekly_hours_viewed),digits = 3))
 ```
-Counting all three seasons, Squid Games has a total of 5.05 trillion hours of 
-watch time. With a total of 22 episodes that are all approximately a little under an hour, and assuming watchers are watching all episodes of the tv show, 18 million subscribers have watch Squid Games. 
+Counting all three seasons, Squid Games has a total of `r SG_total_hours` hours of watch time. With a total of 22 episodes that are all approximately a little under an hour, and assuming watchers are watching all episodes of the tv show, 18 million subscribers have watch Squid Games. 
 
 Another way to calculate Squid Games viewership is to find the sum of all weekly views.
 ```{r}
+#| code-fold: true
 SG_total_views <- GLOBAL_TOP_10 |>
   filter(season_title %in% c( 'Squid Game: Season 1',
                               'Squid Game: Season 2',
                               'Squid Game: Season 3')) |> 
-  summarise(total_views = sum(weekly_views, na.rm = TRUE))|>
-  print()
+  summarise(total_views = sum(weekly_views, na.rm = TRUE))
 ```
-This method calculates that around 400 million people watched Squid Games. It is important to note that there are missing weekly views values from 2021-09-19 to 2022-06-19, meaning the total view count is not as high as it could be. Nonetheless, the view count shows the significant success of all three seasons of Squid Games. 
+This method calculates that around `r SG_total_views` people watched Squid Games. It is important to note that there are missing weekly views values from 2021-09-19 to 2022-06-19, meaning the total view count is not as high as it could be. Nonetheless, the view count shows the significant success of all three seasons of Squid Games. 
 
 The first method is assuming that Netflix users watch all episodes of Squid Games while the second method shows how many times a Netflix user watched an individual episode. 
 
 ### 8. Approximately how many views did Red Notice receive in 2021?
 ```{r}
-GLOBAL_TOP_10 |>
+#| code-fold: true
+view_count_8 <- GLOBAL_TOP_10 |>
   filter(year(week)== 2021) |>
   filter(show_title == 'Red Notice') |>
   summarise(total_hours_watched = sum(weekly_hours_viewed)) |> 
   summarise(view_count = total_hours_watched/(118/60))
 ```
-Red Notice recieved around 200 million views in 2021. According to the Netflix's Tudum, Red Notice is the second most popular English Language [film](https://www.netflix.com/tudum/top10/most-popular) of all time. . 
+Red Notice recieved around `r view_count_8` views in 2021. According to the Netflix's Tudum, Red Notice is the second most popular English Language [film](https://www.netflix.com/tudum/top10/most-popular) of all time. . 
 
 ### 9. How many Films reached Number 1 in the US but did not originally debut there? What is the most recent film to pull this off?
 ```{r}
+#| code-fold: true
 US_TOP_10_RISERS <- COUNTRY_TOP_10 |> 
   filter(category == 'Films', 
          country_name == 'United States') |> 
@@ -215,11 +245,9 @@ US_TOP_10_RISERS <- COUNTRY_TOP_10 |>
   ungroup() |>
   filter(debut_rank>1,reached_1)
 
-#counting the number of 
-US_TOP_10_RISERS |>
+film_count_9 <- US_TOP_10_RISERS |>
   summarise(film_count = n_distinct(show_title))
 
-#Most recent movie to rise in weekly_rank
 most_recent_riser <- COUNTRY_TOP_10 |>
   filter(category == 'Films',
          country_name == 'United States',
@@ -230,22 +258,24 @@ most_recent_riser <- COUNTRY_TOP_10 |>
   ungroup() |>
   arrange(desc(recent_1)) |>
   slice(1)|>
-  print()
+  pull(show_title)
 ```
-45 films reached Number 1 in the US but did not originally debut there. The most recent film to do this is KPop Demon Hunters. 
+`r film_count_9` films reached Number 1 in the US but did not originally debut there. The most recent film to do this is `r most_recent_riser`.
 
 ### 10. Which TV show/season hit the top 10 in the most countries in its debut week? In how many countries did it chart?
 ```{r}
-COUNTRY_TOP_10 |> 
+#| code-fold: true
+show_in_most_10 <- COUNTRY_TOP_10 |> 
   filter(category == 'TV') |>
   group_by(show_title,country_name) |> 
   summarise(debut_week = min(week), .groups = 'drop') |>
   group_by(show_title, debut_week) |>
   summarise(countries_charted = n_distinct(country_name), .groups = 'drop') |>
   arrange(desc(countries_charted)) |>
-  head(5)
+  head(1)|>
+  pull(show_title)
 ```
-Emily In Paris hit the top 10 in the most countries in its debut week. It charted in 94 countires. 
+`r show_in_most_10` hit the top 10 in the most countries in its debut week. It charted in 94 countries. 
 
 # Press Releases: 
 
