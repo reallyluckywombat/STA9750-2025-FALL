@@ -1,0 +1,30 @@
+/* Change background */
+body {
+  font-family: default;
+  font-weight: 600;
+  background-color: #D3EEE8; 
+  color: #042A2B;}
+
+/* Customize headers */
+h1 {
+  color: #042A2B;
+  font-weight: 900;}
+h2 {
+  color: #042A2B;
+  font-weight: 600;}
+h3 {
+  color: #042A2B;
+  font-weight: 300;}
+
+/* code folding button*/
+details > summary {
+  color: #315E44;     
+  padding: 1px 12px;  /* indentation and spacing */
+  cursor: pointer;    
+  font-weight: bold;}
+  
+/*link colors */
+a {
+  color: #FF4979;}
+a:hover {
+  color: #FF85A5 ;}
