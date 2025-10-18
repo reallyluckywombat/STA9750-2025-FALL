@@ -1,0 +1,11 @@
+---
+title: "MP02: Making Backyards Affordable for All"
+format: 
+  html:
+    theme: morph
+    css: custom.css
+    toc: true
+    toc-location: right
+    toc-depth: 3
+---
+
