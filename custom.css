@@ -1,4 +1,19 @@
-/* Change background */
+.navbar{
+  background-color: #042A2B; 
+  color: #D3EEE8}
+
+.navbar a {
+  color: #D3EEE8}
+  
+#TOC a.active,
+.sidebar a.active,
+#TOC a.active:visited,
+.sidebar a.active:visited{
+  color: #042A2B !important;
+  font-weight: bold;
+}
+
+
 body {
   font-family: default;
   font-weight: 600;
