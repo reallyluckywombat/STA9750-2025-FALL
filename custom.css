@@ -13,7 +13,6 @@
   font-weight: bold;
 }
 
-
 body {
   font-family: default;
   font-weight: 600;
@@ -23,13 +22,19 @@ body {
 /* Customize headers */
 h1 {
   color: #042A2B;
-  font-weight: 900;}
+  font-weight: 1000;}
 h2 {
   color: #042A2B;
-  font-weight: 600;}
+  font-weight: 600;
+  margin-top: 0.1em;     /* space above the header */
+  margin-bottom: 0.1em; /* space below the header */
+}
 h3 {
   color: #042A2B;
-  font-weight: 300;}
+  font-weight: 600;
+  margin-top: 0.2em; 
+}
+  
 
 /* code folding button*/
 details > summary {
