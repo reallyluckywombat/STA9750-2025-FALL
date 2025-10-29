@@ -262,10 +262,164 @@ WAGES <- get_bls_qcew_annual_averages()
 ```
 
 # Data Integration and Exploration
-### Task 2: Multi-Table Questions 
+## Task 2: Multi-Table Questions 
 1. Which CBSA (by name) permitted the largest number of new housing units in the decade from 2010 to 2019 (inclusive)?
+```{r}
+T2.1 <- PERMITS |>
+  filter(year >= 2010 & year <= 2019) |>
+  slice_max(new_housing_units_permitted)|>
+  inner_join(POPULATION, join_by(CBSA == GEOID))|>
+  slice_head()|>
+  pull(NAME)
+```
+**`r T2.1`** permitted the largest number of new housing units from 2010 to 2019
 
+--- 
+2. In what year did Albuquerque, NM (CBSA Number 10740) permit the most new housing units?
+```{r}
+#| message: false
+#setting up datatables and formatting functions
+if(!require("DT")) 
+library(DT) 
 
+library(stringr)
+format_titles <- function(df){
+  colnames(df) <- str_replace_all(colnames(df), "_", " ") |> 
+    str_to_title()
+  df}
+```
 
+```{r}
+#Creating a data table to see all of the new housing units 
+#permitted for Albuquerque for the years documented. 
+PERMITS |>
+  filter(CBSA == 10740)|>
+  format_titles() |>
+  rename('CBSA' = 'Cbsa')|>
+  datatable(options=list(searching=FALSE, info=FALSE))
+```
+We can see that in 2021, the NHUP is almost doubled from all of the other years. 
+```{r}
+T2.2 <- PERMITS |>
+  filter(CBSA == 10740)|> 
+  filter(!year == 2021) |>
+  slice_max(new_housing_units_permitted)|>
+  pull(year)
+```
+If we leave out this outlier, **`r T2.2`** had the highest number of new housing permits
 
+3. Which state (not CBSA) had the highest average individual income in 2015?
 
+```{r}
+# total income for every CBSA in 2015
+T2.3_total_income <- INCOME |>
+  filter(year == 2015)|>
+  inner_join(HOUSEHOLDS, join_by(GEOID == GEOID))|>
+  filter(year.y == 2015)|>
+  group_by(GEOID)|>
+  mutate(total_income = household_income * households)|>
+  select(-NAME.y)|>
+  mutate(state = str_extract(NAME.x, ", (.{2})", group=1))
+
+# total income for every state
+T2.3_state_income <- T2.3_total_income |>
+  group_by(state)|>
+  summarise(state_total_income = sum(total_income))
+View(T2.3_state_income)
+
+# total population in every state
+T2.3_population_state <- POPULATION |>
+  filter(year == 2015)|>
+  mutate(state = str_extract(NAME, ", (.{2})", group=1))|>
+  group_by(state)|>
+  summarise(state_total_population = sum(population))
+
+#Dividing total state income by total state population to find the average 
+#individual income by state
+T2.3_highest_indivi_income <- T2.3_state_income |>
+  inner_join(T2.3_population_state, join_by(state == state))|>
+  mutate(average_individual_income = state_total_income/state_total_population)|>
+  slice_max(average_individual_income)|>
+  pull(state)
+```
+**`r T2.3_highest_indivi_income`** had the highest average individual income in 2015. 
+
+**For Fun:** Here is a datatable of all states' average individual incomes!
+```{r}
+T2.3_state_income |>
+  inner_join(T2.3_population_state, join_by(state == state))|>
+  mutate(average_individual_income = state_total_income/state_total_population)|>
+  format_titles()|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('State Total Income', 
+                'State Total Population', 
+                'Average Individual Income'), digits = 0)
+```
+
+4. What is the last year in which the NYC CBSA had the most data scientists in the country?
+```{r}
+#| message: false
+#Creating a GEOID column in the Wages table. We are removing the "c" and
+#then adding a "0" to FIPS to join with GEOID
+WAGES2 <- WAGES |>
+  mutate(GEOID = paste0(gsub("C", "", FIPS), "0"))
+
+#Now we can join the wage columns with the other tables!
+#finding NYC's GeoID
+POPULATION |>
+  filter(NAME == 'New York-Newark-Jersey City, NY-NJ-PA Metro Area')|>
+  pull(GEOID)
+
+# Now that we know that NYC's GEOID is 35620, lets query the wage2 dataset
+# to find the count of data scientists
+T2.4 <- WAGES2 |>
+  filter(INDUSTRY == 5182)|> # filtering for data professionals
+  arrange(desc(EMPLOYMENT)) |> # ordering count of DP employment
+  select(YEAR, EMPLOYMENT, GEOID)|> 
+  group_by(YEAR)|>
+  filter(EMPLOYMENT == max(EMPLOYMENT))|>
+  filter(GEOID == 35620) |>
+  head(n=1)|>
+  pull(YEAR)
+```
+**`r T2.4`** was the last year in which the NYC CBSA had the most data scientists in the country
+
+5. What fraction of total wages in the NYC CBSA was earned by people employed in the finance and insurance industries (NAICS code 52)? In what year did this fraction peak?
+```{r}
+#calculating the total wages from NYC GEOID 35620 
+T2.5_totalwage_nyc <- WAGES2 |>
+  filter(GEOID == 35620)|>
+  summarise(totalwage_nyc = sum(TOTAL_WAGES))|>
+  pull(totalwage_nyc)
+
+#calculating total wages from NYC from Finance Employees
+T2.5_totalwage_nyc_finance <- WAGES2 |>
+  filter(GEOID == 35620)|>
+  filter(INDUSTRY == 52)|>
+  summarise(totalwage_nyc_finance = sum(TOTAL_WAGES))|> #total wages from NYC from Finance Employees
+  pull(totalwage_nyc_finance)
+
+T2.5_finance_fraction <- 
+  T2.5_totalwage_nyc_finance/T2.5_totalwage_nyc
+# it says 0.04086742, which is 4.08% idk that seems wrong, oddly low
+
+#now what year did the fraction year... we have to group by year
+T2.5_nyc_year <- WAGES2 |>
+  filter(GEOID == 35620)|>
+  group_by(YEAR)|>
+  summarise(totalwage_nyc = sum(TOTAL_WAGES))
+
+T2.5_nyc_year_finance <- WAGES2 |>
+  filter(GEOID == 35620)|>
+  filter(INDUSTRY==52)|>
+  group_by(YEAR)|>
+  summarise(totalfinancewage_nyc = sum(TOTAL_WAGES))
+
+T2.5_peak <- T2.5_nyc_year |>
+  inner_join(T2.5_nyc_year_finance, join_by(YEAR==YEAR))|>
+  mutate(year_fraction = totalfinancewage_nyc/totalwage_nyc)|>
+  arrange(desc(year_fraction))|>
+  head(n=1)|>
+  pull(YEAR)
+```
+**`r T2.5_peak`**
