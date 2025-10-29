@@ -17,7 +17,13 @@ body {
   font-family: default;
   font-weight: 600;
   background-color: #D3EEE8; 
-  color: #042A2B;}
+  color: #042A2B;
+}
+
+p {
+  margin-bottom: 0.5em;
+  line-height: 1.4;
+}
 
 /* Customize headers */
 h1 {
@@ -31,8 +37,9 @@ h2 {
 }
 h3 {
   color: #042A2B;
-  font-weight: 600;
+  font-weight: 300;
   margin-top: 0.2em; 
+  margin-bottom: 0.3em;
 }
   
 
@@ -41,7 +48,8 @@ details > summary {
   color: #315E44;     
   padding: 1px 12px;  /* indentation and spacing */
   cursor: pointer;    
-  font-weight: bold;}
+  font-weight: bold;
+}
   
 /*link colors */
 a {
