@@ -274,7 +274,7 @@ T2.1 <- PERMITS |>
 ```
 **`r T2.1`** permitted the largest number of new housing units from 2010 to 2019
 
---- 
+
 2. In what year did Albuquerque, NM (CBSA Number 10740) permit the most new housing units?
 ```{r}
 #| message: false
