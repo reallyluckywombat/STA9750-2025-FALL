@@ -704,5 +704,122 @@ HG_composite_low |>
   datatable(options=list(searching=FALSE, info=FALSE))|>
   formatRound(c('Composite Score'))
 ```
+## Task 6: Visualization
+### 1. Cities with the Highest Housing Growth Rates
+```{r}
+#| warning: false
+HG_rate_standardized |>
+  ggplot(aes(x = year, y = HG_rate_zscore, group = GEOID, color = factor(GEOID))) +
+  geom_line(size = .8) +
+  gghighlight(max(HG_rate_zscore) > 3, 
+              use_direct_label = FALSE,
+              unhighlighted_params = list(size = 0.4, alpha = 0.3)) +
+  scale_color_brewer(palette='Paired', name = "GEOID")+
+  xlab("Year") + 
+  ylab("Z-Score") + 
+  labs(title = "Housing Growth Z-Scores by CBSA", ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+### 2. Housing Growth In Relation to Population Growth
+```{r}
+#| warning: false
+pop_growth <- POPULATION |>
+  filter(year %in% c(2009, 2023)) |>       
+  select(GEOID, year, population) |>
+  pivot_wider(names_from = year, values_from = population, 
+              names_prefix = "pop_") |> 
+  filter(pop_2023 > pop_2009)|>
+  mutate(pop_increase = pop_2023 - pop_2009)|>
+  arrange(desc(pop_increase))
 
+#pulling the geoid where there is population growth in the study period
+pop_growth_geoid <- pop_growth |>
+  pull(GEOID)
+
+HG_rate_standardized |>
+  ggplot(aes(x = year, y = HG_rate_zscore, group = GEOID, color = GEOID %in% pop_growth_geoid)) +
+  geom_line() +
+  scale_color_manual(values = c("TRUE" = "darkorchid", "FALSE" = "gray85"),
+                     name = NULL,                     # removes the legend title
+                     labels = c("FALSE" = "Other CBSA", "TRUE" = "Population Growth")) +
+  gghighlight(max(HG_rate_zscore) > 3, 
+              use_direct_label = FALSE,
+              unhighlighted_params = list(size = 0.4, alpha = 0.3)) +
+  xlab("Year") + 
+  ylab("Z-Score") + 
+  labs(title = "Highest Housing Growth Z-Scores by CBSA with Population Growth") +
+  theme_bw()+
+  theme(legend.position = "bottom") 
+```
+
+### 3. data viz for highest rent burden
+```{r}
+rb_standardized |>
+  ggplot(aes(x = year, y = rb_zscore, group = GEOID, color = factor(GEOID))) +
+  geom_line(size = .8) +
+  gghighlight(max(rb_zscore, na.rm = TRUE) > 3.5, use_direct_label = FALSE,
+              unhighlighted_params = list(size = 0.4, alpha = 0.3)) +
+  scale_color_brewer(palette='Paired', name = "GEOID")+
+  xlab("Year") + 
+  ylab("Z-Score") + 
+  labs(title = "Rent Burden Z-Scores by CBSA", ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+[INSERT thought process]
+
+### 3.2 data viz for highest rent burden
+```{r}
+states_rb_standardized <- rb_standardized |>
+  filter(!str_detect(NAME.x, "PR Metro Area|PR Micro Area|Micro Area"))
+
+states_rb_standardized |>
+  ggplot(aes(x = year, y = rb_zscore, group = GEOID, color = factor(GEOID))) +
+  geom_line(size = .8) +
+  gghighlight(max(rb_zscore, na.rm = TRUE) > 2.6, use_direct_label = FALSE,
+              unhighlighted_params = list(size = .3, alpha = 0.3)) +
+  scale_color_brewer(palette='Paired', name = "GEOID")+
+  xlab("Year") + 
+  ylab("Z-Score") + 
+  labs(title = "Rent Burden Z-Scores by CBSA", ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+### 4. had a decrease in rent burden over time 
+```{r}
+rb_decrease <- states_rb_standardized |>
+  filter(year %in% c(2009, 2023)) |> 
+  select(GEOID, NAME.x, year, rb_zscore) |>
+  pivot_wider(names_from = year, values_from = rb_zscore, 
+              names_prefix = "rb_") |> 
+  filter(rb_2023 < rb_2009) |>
+  mutate(rent_burden_decrease = rb_2023 - rb_2009)|>
+  arrange(desc(rent_burden_decrease))|>
+  slice_min(rent_burden_decrease, n=10)|>
+  pull(GEOID)
+
+#Base plot with "Other CBSA" (background)
+ggplot() +
+  geom_line(
+    data = filter(states_rb_standardized, !(GEOID %in% rb_decrease)),
+    aes(x = year, y = rb_zscore, group = GEOID),
+    color = "gray65", size = 0.4, alpha = 0.6) +
+  # Highlighted lines (on top)
+  geom_line(
+    data = filter(states_rb_standardized, GEOID %in% rb_decrease),
+    aes(x = year, y = rb_zscore, group = GEOID),
+    color = "deeppink4", size = 0.9) +
+  xlab("Year") + 
+  ylab("Z-Score") + 
+  labs(title = "Rent Burden Z-Score over time by CBSA",
+       subtitle = 'Dark Pink lines indicate CBSAs with the greatest decrease
+       in rent burden over time') +
+  theme_bw() +
+  theme(legend.position = "bottom") 
+
+```
+
+## Policy Brief
 
