@@ -10,10 +10,10 @@ format:
     code-fold: true
 ---
 # Executive Summary 
-[INSERT TEXT]
+In this R project, I analyze data from the Bureau of Labor Statistics (BLS) and the U.S. Census Bureau on population, rent, income, employment, and housing growth across U.S. cities and metropolitan areas. Using these data, I develop a rent burden score and a housing growth index to evaluate how different regions perform relative to national averages. The analysis reveals important socio-economic patterns within Core-Based Statistical Areas (CBSAs) and provides insights that can help policymakers design data-driven housing strategies and improve affordability outcomes at the state and local levels.
 
 # Data Acquisition
-We are creating the Income, Rent, Population, and Household tables.
+the Income, Rent, Population, and Household Dataset
 ```{r}
 #| message: false
 if(!dir.exists(file.path("data", "mp02"))){
@@ -80,7 +80,7 @@ HOUSEHOLDS <- get_acs_all_years("B11001_001") |>
     rename(households = B11001_001)
 ```
 
-Now we will create a table for the number of new housing units built each year.
+Housing Permits Dataset
 ```{r}
 get_building_permits <- function(start_year = 2009, end_year = 2023){
     fname <- glue("housing_units_{start_year}_{end_year}.csv")
@@ -142,7 +142,7 @@ get_building_permits <- function(start_year = 2009, end_year = 2023){
 PERMITS <- get_building_permits()
 ```
 
-Next, we are going to retrieve the North American Industry Classification System (NAICS) coding system from the Bureau of Labor Statistics (BLS).
+The North American Industry Classification System (NAICS) coding system from the Bureau of Labor Statistics (BLS).
 ```{r}
 #| message: false
 library(httr2)
@@ -195,7 +195,7 @@ get_bls_industry_codes <- function(){
 INDUSTRY_CODES <- get_bls_industry_codes()
 ```
 
-Finally, we will retrieve the BLS Quarterly Census of Employment and Wages.
+The BLS Quarterly Census of Employment and Wages.
 ```{r}
 library(httr2)
 library(rvest)
@@ -821,5 +821,69 @@ ggplot() +
 
 ```
 
-## Policy Brief
+## Policy Brief: Affordable Housing Program: YIMBY (Yes In My Backyard)
+```{r}
+#| results: 'hide'
+#1
+GF_rb <- rb_standardized |>
+  filter(GEOID == 24500)|>
+  summarise(avg_rb_zscore = mean(rb_zscore))|>
+  pull(avg_rb_zscore)
 
+#2
+HG_rate_standardized |>
+  filter(GEOID == 24500)|>
+  select(year, growth, HG_rate_zscore)
+
+#3
+orlando_rb <- rb_standardized|>
+  filter(GEOID == 36740)|>
+  summarise(orlando_avg_rb = mean(rb_zscore))|>
+  pull(orlando_avg_rb)
+
+#4 
+orlando_rb_2023 <- rb_standardized|>
+  filter(GEOID == 36740)|>
+  filter(year == 2023)|>
+  pull(rb_zscore)
+
+#5
+#total Orlando Population
+orlando_total_pop <- POPULATION|>
+  filter(GEOID == 36740)|>
+  filter(year == 2023)|>
+  pull(population)
+
+#total NAICS 102,1026,72 workers = 1573385 
+WAGES2|>
+  filter(GEOID == 36740)|>
+  filter(INDUSTRY %in% c(102, 1026,72))|>
+  filter(YEAR == 2023)|>
+  summarise(worker_count = sum(EMPLOYMENT))
+
+
+```
+
+Affordable housing shortages are placing significant financial pressure on families and individuals across the United States. The purpose of this policy proposal is to share key findings and recommendations based on data from the Bureau of Labor Statistics (BLS) and the U.S. Census Bureau.
+
+### **YIMBY Success: Great Falls, Montana**
+
+Great Falls, Montana, offers a strong example of the YIMBY approach in action. The city’s average rent burden is significantly lower than the national average, meaning residents spend a smaller share of their income on housing compared to most U.S. households**(1)**. From 2018 to 2023, Great Falls experienced steady population growth while successfully keeping pace through the consistent issuance of new housing permits each year**(2)**. Although the city’s 2023 housing growth rate is slightly below the national average, the overall trend shows sustained improvement. Our sponsor from Montana endorses this Affordable Housing Program after witnessing these positive outcomes firsthand.
+
+### The Challenge: Orlando, Florida
+
+Inspired by this success, our sponsor from Orlando, Florida, is eager to adopt similar affordable housing strategies. Orlando currently ranks as the 8th highest city in rent burden, with a score of **`r round(orlando_rb, 1)`** (where the national average equals 0)**(3)**. From 2009 to 2023, Orlando’s rent burden score has steadily increased, reaching **`r round(orlando_rb_2023, 1)`** in 2023**(4)**.
+
+Although Orlando’s population continues to grow each year and new housing permits are also on the rise, the persistent increase in rent burden suggests that housing supply is still lagging behind demand. This indicates a pressing need for expanded affordable housing initiatives.
+
+### The Labor Force 
+
+Orlando’s economy is heavily driven by its world-renowned theme parks, including Walt Disney World and Universal Studios, which contribute significantly to the local labor market. According to BLS data, the city has a particularly large workforce in Leisure and Hospitality (NAICS 1026) and Accommodation and Food Services (NAICS 72) sectors.
+
+As of 2023, Orlando’s total population was approximately **`r round(orlando_total_pop / 1e6, 1)`** million, with employees in these industries accounting for 55.8% of the workforce**(5)**. Expanding affordable housing options for this majority of residents would not only improve quality of life but also strengthen the local and global tourism economy. By reducing rent burden, workers would have greater disposable income to spend on goods and services, stimulating further economic growth within the city.
+
+### **Rent Burden and Housing Growth Metric**
+
+To measure rent burden, I standardized the rent-to-income ratio for each U.S. city. A score of 0 represents the national average; higher scores indicate greater rent burden. Thus, Orlando’s 2023 score of **`r round(orlando_rb_2023, 1)`** shows that residents spend significantly more of their income on rent compared to the national average.
+
+Similarly, the housing growth metric measures new housing permits relative to population growth. A score of 0 again represents the national average, while positive scores indicate faster-than-average housing expansion. These standardized measures allow for direct comparison across cities and help identify areas where affordable housing policies are most needed.
