@@ -34,6 +34,12 @@ library(tidyverse)
 library(glue)
 library(readxl)
 library(tidycensus)
+if(!require("DT")) 
+library(DT) 
+library(ggplot2)
+library(scales)
+library(gghighlight)
+
 
 get_acs_all_years <- function(variable, geography="cbsa",
                               start_year=2009, end_year=2023){
@@ -260,6 +266,14 @@ get_bls_qcew_annual_averages <- function(start_year=2009, end_year=2023){
 
 WAGES <- get_bls_qcew_annual_averages()
 ```
+```{r}
+#| message: false
+library(stringr)
+format_titles <- function(df){
+  colnames(df) <- str_replace_all(colnames(df), "_", " ") |> 
+    str_to_title()
+  df}
+```
 
 # Data Integration and Exploration
 ## Task 2: Multi-Table Questions 
@@ -276,18 +290,6 @@ T2.1 <- PERMITS |>
 
 
 2. In what year did Albuquerque, NM (CBSA Number 10740) permit the most new housing units?
-```{r}
-#| message: false
-#setting up datatables and formatting functions
-if(!require("DT")) 
-library(DT) 
-
-library(stringr)
-format_titles <- function(df){
-  colnames(df) <- str_replace_all(colnames(df), "_", " ") |> 
-    str_to_title()
-  df}
-```
 
 ```{r}
 #Creating a data table to see all of the new housing units 
@@ -306,7 +308,7 @@ T2.2 <- PERMITS |>
   slice_max(new_housing_units_permitted)|>
   pull(year)
 ```
-If we leave out this outlier, **`r T2.2`** had the highest number of new housing permits
+If we leave out this outlier, in **`r T2.2`**, Albuquerque, NM had the highest number of new housing permits
 
 3. Which state (not CBSA) had the highest average individual income in 2015?
 
@@ -325,7 +327,6 @@ T2.3_total_income <- INCOME |>
 T2.3_state_income <- T2.3_total_income |>
   group_by(state)|>
   summarise(state_total_income = sum(total_income))
-View(T2.3_state_income)
 
 # total population in every state
 T2.3_population_state <- POPULATION |>
@@ -358,7 +359,7 @@ T2.3_state_income |>
 
 4. What is the last year in which the NYC CBSA had the most data scientists in the country?
 ```{r}
-#| message: false
+#| results: "hide"
 #Creating a GEOID column in the Wages table. We are removing the "c" and
 #then adding a "0" to FIPS to join with GEOID
 WAGES2 <- WAGES |>
@@ -422,4 +423,161 @@ T2.5_peak <- T2.5_nyc_year |>
   head(n=1)|>
   pull(YEAR)
 ```
-**`r T2.5_peak`**
+**`r scales::percent(T2.5_finance_fraction)`** of total wages in the NYC CBSA was earned by people employed in the finance and insurance industries and this peaked in  **`r T2.5_peak`**.
+
+## Task 3: Initial Visualizations
+### The relationship between monthly rent and average household income per CBSA in 2009.
+```{r}
+#| message: false
+T3.1 <- RENT |>
+  filter(year==2009)|>
+  inner_join(INCOME, join_by(GEOID==GEOID))|>
+  filter(year.y==2009)|>
+  select(GEOID,monthly_rent,household_income, year.x)
+
+#plotting monthly rent and household income from 2009
+ggplot(T3.1, aes(x=monthly_rent, y=household_income)) + 
+  geom_point(color = "orange") +
+  geom_smooth(method="lm") +
+  xlab("Monthly Rent(USD$)") + 
+  ylab("Average Household Income(USD$)") + 
+  theme_bw() +
+  ggtitle("Correlation of Monthly Rent and Average Household Income
+          in 2009 by CBSA") +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold",
+                                  margin = margin(b = 8, t = 8)))
+```
+
+### The relationship between total employment and total employment in the health care and social services sector (NAICS 62) across different CBSAs.
+```{r}
+#| message: false
+#| warning: false
+T3.2_total<- WAGES2 |>
+  group_by(GEOID,YEAR)|>
+  summarise(total_employ = sum(EMPLOYMENT))|>
+  ungroup()
+
+T3.2_health <- WAGES2 |>
+  filter(INDUSTRY == 62)|>
+  group_by(GEOID, YEAR)|>
+  summarise(health_employ = sum(EMPLOYMENT,na.rm = TRUE))|>
+  filter(health_employ != 0)|>
+  ungroup()
+
+#creating a joined dataframe
+T3.2_employment<- T3.2_total|>
+  inner_join(T3.2_health, join_by(GEOID,YEAR))
+
+T3.2_ratio <- T3.2_employment |>
+  mutate(
+    ratio = health_employ/ total_employ)
+
+ggplot(T3.2_ratio, aes(x = YEAR, y = ratio, group = GEOID)) +
+  geom_line(alpha = 0.3, color = "cadetblue4") +
+  scale_y_log10(labels = scales::comma) +   # log scale helps with large variation
+  xlab("Year") + 
+  ylab("Employment Ratio (Health Care: Total") + 
+  labs(
+    title = "Ratio of Total Employment to Health Care 
+    & Social Services Employment",
+    subtitle = "Each line represents a different CBSA (GEOID)") +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, face = "bold"))
+```
+
+### The evolution of average household size over time. Use different lines to represent different CBSAs.
+
+```{r}
+#| message: false
+#| warning: false
+
+POPULATION |>
+  inner_join(HOUSEHOLDS, join_by(GEOID, year)) |>
+  mutate(avg_housesize = population / households) |>
+  ggplot(aes(x = year, y = avg_housesize, group = GEOID)) +
+  geom_line(alpha = 0.1, size = .5,color = 'lightslateblue') +
+  xlab("Year") + 
+  ylab("Average Household Size") + 
+  labs(
+    title = "Average Household Size Over Time for Each GEOID") +
+  theme_bw()
+```
+
+# Building Indices of Housing Affordability and Housing Stock Growth
+## Task 4: Rent Burden
+Baseline Value: **The national rent burden average = 0**
+```{r}
+#Joining the INCOME and RENT tables and creating the rent_burden ratio
+rent_income <- INCOME |>
+  mutate(monthly_income = household_income/12)|>
+  inner_join(RENT, join_by(GEOID, year))|>
+  select(GEOID, year, NAME.x, monthly_income, monthly_rent)|>
+  mutate(rent_burden = monthly_rent/monthly_income)
+
+#Standardization and Scaling/Transformation:
+
+#mean national rent burden ratio
+national_rb_mean <- rent_income|>
+  summarise(national_avg = mean(rent_burden))|>
+  pull(national_avg)
+
+#standard deviation of the national rent burden ratio
+national_rb_sd <- rent_income|> 
+  summarise(national_sd = sd(rent_burden))|>
+  pull(national_sd)
+
+#Z score column comparing the rent burden of each geoid and year to the SD 
+rb_standardized <- rent_income |>
+  mutate(rb_zscore = (rent_burden - national_rb_mean) / national_rb_sd)
+```
+### Rent Burden in Burlington, VT Metro Area Over Time
+
+```{r}
+rb_standardized |>
+  filter(GEOID == 15540)|>
+  select(-GEOID, -NAME.x)|>
+  format_titles()|>
+  rename('Z Score' = 'Rb Zscore')|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('Monthly Income','Rent Burden', 'Z Score'))
+```
+### Metro Areas with Highest Rent Burden
+
+```{r}
+#| warning: false
+highest_rb_cities <- rb_standardized |>
+  filter(str_detect(NAME.x, "Metro")) |>
+  group_by(GEOID) |>
+  summarise(geoid_avg = mean(rb_zscore, na.rm = TRUE),
+            NAME.x = first(NAME.x)) |>
+  separate(NAME.x, into = c('City', 'State/Area'), sep = ',\\s')|> 
+  mutate(City = recode(City,
+                       "San Germ?n-Cabo Rojo" = "San Germán-Cabo Rojo",
+                       "Aguadilla-Isabela-San Sebasti?n" = "Aguadilla-Isabela-San Sebastián",
+                       'Mayag?ez' = 'Mayagüez'))|>
+  slice_max(geoid_avg, n = 20)
+
+highest_rb_cities |>
+  rename('Average Annual Z Score'= 'geoid_avg')|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('Average Annual Z Score'))
+```
+### Metro Areas with Lowest Rent Burden
+```{r}
+#| warning: false
+lowest_rb_cities <- rb_standardized |>
+  filter(str_detect(NAME.x, "Metro")) |>
+  group_by(GEOID) |>
+  summarise(geoid_avg = mean(rb_zscore, na.rm = TRUE),
+            NAME.x = first(NAME.x)) |>
+  separate(NAME.x, into = c('City', 'State/Area'), sep = ',\\s')|> 
+  slice_min(geoid_avg, n = 20)
+
+lowest_rb_cities |>
+  rename('Average Annual Z Score'= 'geoid_avg')|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('Average Annual Z Score'))
+```
+
