@@ -39,7 +39,7 @@ library(DT)
 library(ggplot2)
 library(scales)
 library(gghighlight)
-
+library(RcppRoll)
 
 get_acs_all_years <- function(variable, geography="cbsa",
                               start_year=2009, end_year=2023){
@@ -507,7 +507,7 @@ POPULATION |>
 
 # Building Indices of Housing Affordability and Housing Stock Growth
 ## Task 4: Rent Burden
-Baseline Value: **The national rent burden average = 0**
+Baseline Value: **The national rent burden average(Z score) = 0**
 ```{r}
 #Joining the INCOME and RENT tables and creating the rent_burden ratio
 rent_income <- INCOME |>
@@ -543,7 +543,7 @@ rb_standardized |>
   datatable(options=list(searching=FALSE, info=FALSE))|>
   formatRound(c('Monthly Income','Rent Burden', 'Z Score'))
 ```
-### Metro Areas with Highest Rent Burden
+### Cities with the Highest Rent Burden
 
 ```{r}
 #| warning: false
@@ -564,7 +564,7 @@ highest_rb_cities |>
   datatable(options=list(searching=FALSE, info=FALSE))|>
   formatRound(c('Average Annual Z Score'))
 ```
-### Metro Areas with Lowest Rent Burden
+### Cities with the Lowest Rent Burden
 ```{r}
 #| warning: false
 lowest_rb_cities <- rb_standardized |>
@@ -580,4 +580,129 @@ lowest_rb_cities |>
   datatable(options=list(searching=FALSE, info=FALSE))|>
   formatRound(c('Average Annual Z Score'))
 ```
+
+## Task 5: Housing Growth
+
+### Constructing the Instantaneous Measure
+```{r}
+#| warning: false
+#Joining POPULATION and PERMITS
+POP_PERMITS <- POPULATION |>
+  inner_join(PERMITS, join_by(GEOID == CBSA, year == year))
+
+#‘instantaneous’: metric based on absolute population 
+HG_instant <- POP_PERMITS |>
+  mutate(permits_per1000 = (new_housing_units_permitted / population) * 1000)
+
+#Standardizing 
+#HG instant mean
+HGI_mean <- HG_instant |>
+  summarise(nationalmean_permits = mean(permits_per1000))|>
+  pull(nationalmean_permits)
+
+#HG instant Standard Deviation
+HGI_sd <- HG_instant |>
+  summarise(nationalstd_permits = sd(permits_per1000))|>
+  pull(nationalstd_permits)
+
+#HG instant Z score 
+HGI_standardized <- HG_instant |>
+  mutate(HGI_zscore = (permits_per1000 - HGI_mean)/ HGI_sd)
+```
+### **Instantaneous**: Cities with the Highest Housing Growth 
+Baseline Value: **The national housing growth average(Z score) = 0**
+```{r}
+#| warning: false
+highest_hgi_cities <- HGI_standardized |>
+  select(GEOID, HGI_zscore, NAME, year)|>
+  separate(NAME, into = c('City', 'State'), sep = ',\\s')|> 
+  slice_max(HGI_zscore, n = 20)
+
+highest_hgi_cities |>
+  rename('CBSA'= 'GEOID')|>
+  rename('Z Score' = 'HGI_zscore')|>
+  rename('Year' = 'year')|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('Z Score'))
+```
+### Constructing the Rate-Based Measure
+```{r}
+#‘rate-based’: metric based on pop growth over 5 years lookback window
+HG_rate <- POP_PERMITS |>
+  arrange(GEOID, year)|>
+  group_by(GEOID)|>
+  mutate(
+    pop_5yrs_ago = lag(population, n = 5),
+    growth = population - pop_5yrs_ago,
+    housing_5yrs = roll_sumr(new_housing_units_permitted, 5, fill = NA),
+    housing_growth_rate = (housing_5yrs / growth)*1000
+  )|>
+  filter(year >=2014)|>
+  ungroup()
+
+#Standardizing
+#HG rate Mean 
+HG_rate_mean <- HG_rate |>
+  summarise(nationalmean_permits_rate = mean(housing_growth_rate, na.rm = TRUE))|>
+  pull(nationalmean_permits_rate)
+
+#HG rate Standard Deviation
+HG_rate_sd <- HG_rate |>
+  summarise(nationalstd_permits_rate = sd(housing_growth_rate, na.rm = TRUE))|>
+  pull(nationalstd_permits_rate)
+
+#HG rate Z score 
+HG_rate_standardized <- HG_rate |>
+  mutate(HG_rate_zscore = (housing_growth_rate - HG_rate_mean)/ HG_rate_sd)
+```
+
+### **Rate-Based**: Cities with the Highest Housing Growth 
+Baseline Value: **The national housing growth average(Z score) = 0**
+```{r}
+highest_hgrate_cities <- HG_rate_standardized |>
+  select(GEOID, HG_rate_zscore, NAME, year)|>
+  separate(NAME, into = c('City', 'State'), sep = ',\\s')|> 
+  slice_max(HG_rate_zscore, n = 20)
+
+highest_hgrate_cities |>
+  rename('CBSA'= 'GEOID')|>
+  rename('Z Score' = 'HG_rate_zscore')|>
+  rename('Year' = 'year')|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('Z Score'))
+```
+
+### Constructing the Composite Measure
+```{r}
+HG_composite <- HG_rate_standardized |>
+  inner_join(HGI_standardized, join_by(GEOID, year))|>
+  mutate(composite_score = (HGI_zscore + HG_rate_zscore)/2)|>
+  select(GEOID, composite_score, NAME.x, year)|>
+  separate(NAME.x, into = c('City', 'State'), sep = ',\\s')
+```
+### Composite score: Cities with the Highest Housing Growth 
+```{r}
+HG_composite_high<- HG_composite |>
+  slice_max(composite_score, n=20)
+
+HG_composite_high |>
+  rename('CBSA'= 'GEOID')|>
+  rename('Composite Score' = 'composite_score')|>
+  rename('Year' = 'year')|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('Composite Score'))
+```
+### Composite score: Cities with the Lowest Housing Growth 
+```{r}
+HG_composite_low <- HG_composite |>
+  slice_min(composite_score, n=20)
+
+HG_composite_low |>
+  rename('CBSA'= 'GEOID')|>
+  rename('Composite Score' = 'composite_score')|>
+  rename('Year' = 'year')|>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('Composite Score'))
+```
+
 
