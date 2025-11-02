@@ -13,7 +13,7 @@ format:
 In this R project, I analyze data from the Bureau of Labor Statistics (BLS) and the U.S. Census Bureau on population, rent, income, employment, and housing growth across U.S. cities and metropolitan areas. Using these data, I develop a rent burden score and a housing growth index to evaluate how different regions perform relative to national averages. The analysis reveals important socio-economic patterns within Core-Based Statistical Areas (CBSAs) and provides insights that can help policymakers design data-driven housing strategies and improve affordability outcomes at the state and local levels.
 
 # Data Acquisition
-the Income, Rent, Population, and Household Dataset
+Income, Rent, Population, and Household Dataset
 ```{r}
 #| message: false
 if(!dir.exists(file.path("data", "mp02"))){
@@ -142,7 +142,7 @@ get_building_permits <- function(start_year = 2009, end_year = 2023){
 PERMITS <- get_building_permits()
 ```
 
-The North American Industry Classification System (NAICS) coding system from the Bureau of Labor Statistics (BLS).
+The North American Industry Classification System (NAICS) coding system from the Bureau of Labor Statistics (BLS)
 ```{r}
 #| message: false
 library(httr2)
@@ -195,7 +195,7 @@ get_bls_industry_codes <- function(){
 INDUSTRY_CODES <- get_bls_industry_codes()
 ```
 
-The BLS Quarterly Census of Employment and Wages.
+The BLS Quarterly Census of Employment and Wages
 ```{r}
 library(httr2)
 library(rvest)
@@ -775,6 +775,8 @@ HG_rate_standardized |>
 ```
 
 ### 3. Cities with the Highest Rent Burden Score
+
+This visualization showcases the US CBSA's with the highest rent burden score, and most of them are Puerto Rico areas. Let's filter out PR areas, and examine the top CBSA's from the 50 states with the highest rent burden score. 
 ```{r}
 rb_standardized |>
   ggplot(aes(x = year, y = rb_zscore, group = GEOID, color = factor(GEOID))) +
@@ -799,9 +801,11 @@ T6_rb_pr |>
   select(-rb_zscore)|>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
-This visualization showcases the US CBSA's with the highest rent burden score, and most of them are Puerto Rico areas. Let's filter out PR areas, and examine the top CBSA's from the 50 states with the highest rent burden score. 
+
 
 ### 3.2 Cities with the Highest Rent Burden Score (excluding Puerto Rico)
+
+Interesting! This visualization shows that cities in Florida rank among the most expensive places to live.
 ```{r}
 states_rb_standardized <- rb_standardized |>
   filter(!str_detect(NAME.x, "PR Metro Area|PR Micro Area|Micro Area"))
