@@ -476,7 +476,7 @@ ggplot(T3.2_ratio, aes(x = YEAR, y = ratio, group = GEOID)) +
   geom_line(alpha = 0.3, color = "cadetblue4") +
   scale_y_log10(labels = scales::comma) +   # log scale helps with large variation
   xlab("Year") + 
-  ylab("Employment Ratio (Health Care: Total") + 
+  ylab("Employment Ratio (Health Care: Total)") + 
   labs(
     title = "Ratio of Total Employment to Health Care 
     & Social Services Employment",
@@ -493,21 +493,29 @@ ggplot(T3.2_ratio, aes(x = YEAR, y = ratio, group = GEOID)) +
 #| message: false
 #| warning: false
 
-POPULATION |>
-  inner_join(HOUSEHOLDS, join_by(GEOID, year)) |>
-  mutate(avg_housesize = population / households) |>
-  ggplot(aes(x = year, y = avg_housesize, group = GEOID)) +
-  geom_line(alpha = 0.1, size = .5,color = 'lightslateblue') +
-  xlab("Year") + 
-  ylab("Average Household Size") + 
-  labs(
-    title = "Average Household Size Over Time for Each GEOID") +
-  theme_bw()
+  POPULATION |>
+    inner_join(HOUSEHOLDS, join_by(GEOID, year)) |>
+    mutate(avg_housesize = population / households) |>
+    ggplot(aes(x = year, y = avg_housesize, group = GEOID, color = as.factor(GEOID))) +
+    geom_line(alpha = 0.5, size = 0.7) +
+    gghighlight(GEOID %in% c(35620, 31080),
+                label_key = GEOID,
+                use_direct_label = TRUE,
+                unhighlighted_params = list(alpha = 0.3, color = "grey80")) +
+  scale_color_manual(values = c("35620" = "tomato", "31080" = "steelblue")) +
+    xlab("Year") + 
+    ylab("Average Household Size") + 
+    labs(title = "Average Household Size Over Time for Each GEOID",
+         caption = '35620 = NYC, 31080 = LA') +
+    theme_bw() +
+    theme(
+    legend.position = "none",
+    plot.title = element_text(hjust = 0.5, face = "bold"))
 ```
 
 # Building Indices of Housing Affordability and Housing Stock Growth
 ## Task 4: Rent Burden
-Baseline Value: **The national rent burden average(Z score) = 0**
+Baseline value**The national rent burden average(Z score) = 0**
 ```{r}
 #Joining the INCOME and RENT tables and creating the rent_burden ratio
 rent_income <- INCOME |>
@@ -543,6 +551,9 @@ rb_standardized |>
   datatable(options=list(searching=FALSE, info=FALSE))|>
   formatRound(c('Monthly Income','Rent Burden', 'Z Score'))
 ```
+While for majority of the years in the study period indicate that Burlington, Vermont has a higher rent burden compared to the national average, the z score is relatively low. This tells us that in comparison to the national average, Burlington is relatively an affordable city to reside in. 
+
+
 ### Cities with the Highest Rent Burden
 
 ```{r}
@@ -582,6 +593,7 @@ lowest_rb_cities |>
 ```
 
 ## Task 5: Housing Growth
+Baseline Value: **The national housing growth average(Z score) = 0**
 
 ### Constructing the Instantaneous Measure
 ```{r}
@@ -610,7 +622,7 @@ HGI_standardized <- HG_instant |>
   mutate(HGI_zscore = (permits_per1000 - HGI_mean)/ HGI_sd)
 ```
 ### **Instantaneous**: Cities with the Highest Housing Growth 
-Baseline Value: **The national housing growth average(Z score) = 0**
+
 ```{r}
 #| warning: false
 highest_hgi_cities <- HGI_standardized |>
@@ -720,8 +732,17 @@ HG_rate_standardized |>
   labs(title = "Housing Growth Z-Scores by CBSA", ) +
   theme_bw() +
   theme(legend.position = "bottom")
+
+T6_dt <- highest_hgrate_cities |>
+  filter(max(HG_rate_zscore) > 3)|>
+  select(GEOID, City, State)|>
+  head(n=10)
+
+T6_dt|>
+  datatable(options=list(searching=FALSE, info=FALSE))
 ```
 ### 2. Housing Growth In Relation to Population Growth
+This is the same graph as the one above, but the purple indicates the GEOIDs that has population growth over the study period
 ```{r}
 #| warning: false
 pop_growth <- POPULATION |>
@@ -753,7 +774,7 @@ HG_rate_standardized |>
   theme(legend.position = "bottom") 
 ```
 
-### 3. data viz for highest rent burden
+### 3. Cities with the Highest Rent Burden Score
 ```{r}
 rb_standardized |>
   ggplot(aes(x = year, y = rb_zscore, group = GEOID, color = factor(GEOID))) +
@@ -766,10 +787,21 @@ rb_standardized |>
   labs(title = "Rent Burden Z-Scores by CBSA", ) +
   theme_bw() +
   theme(legend.position = "bottom")
-```
-[INSERT thought process]
 
-### 3.2 data viz for highest rent burden
+T6_rb_pr <- rb_standardized |>
+  select(GEOID, NAME.x, rb_zscore) |>
+  arrange(desc(rb_zscore)) |>
+  distinct(GEOID, .keep_all = TRUE) |>
+  separate(NAME.x, into = c('City', 'State'), sep = ',\\s')|> 
+  slice_head(n = 9)
+  
+T6_rb_pr |>
+  select(-rb_zscore)|>
+  datatable(options=list(searching=FALSE, info=FALSE))
+```
+This visualization showcases the US CBSA's with the highest rent burden score, and most of them are Puerto Rico areas. Let's filter out PR areas, and examine the top CBSA's from the 50 states with the highest rent burden score. 
+
+### 3.2 Cities with the Highest Rent Burden Score (excluding Puerto Rico)
 ```{r}
 states_rb_standardized <- rb_standardized |>
   filter(!str_detect(NAME.x, "PR Metro Area|PR Micro Area|Micro Area"))
@@ -785,9 +817,20 @@ states_rb_standardized |>
   labs(title = "Rent Burden Z-Scores by CBSA", ) +
   theme_bw() +
   theme(legend.position = "bottom")
+
+T6_nopr <- states_rb_standardized|>
+  select(GEOID, NAME.x, rb_zscore) |>
+  arrange(desc(rb_zscore)) |>
+  distinct(GEOID, .keep_all = TRUE) |>
+  separate(NAME.x, into = c('City', 'State'), sep = ',\\s')|> 
+  slice_head(n = 10)
+
+T6_nopr |>
+  select(-rb_zscore)|>
+  datatable(options=list(searching=FALSE, info=FALSE))
 ```
 
-### 4. had a decrease in rent burden over time 
+### 4. Rent Burden Score Over Time
 ```{r}
 rb_decrease <- states_rb_standardized |>
   filter(year %in% c(2009, 2023)) |> 
