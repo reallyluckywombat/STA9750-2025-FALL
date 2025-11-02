@@ -274,6 +274,10 @@ format_titles <- function(df){
     str_to_title()
   df}
 ```
+### EC: Relationship Diagram
+
+![](mp02_erd.png)
+note: Wages's INDUSTRY can be joined with INDUSTRY_CODES level1_code, level2_code, level3_code, and level4_code, but the program I used doesn't allow me to create multiple connections. 
 
 # Data Integration and Exploration
 ## Task 2: Multi-Table Questions 
