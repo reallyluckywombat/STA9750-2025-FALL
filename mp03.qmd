@@ -1,0 +1,227 @@
+---
+title: "NYC Trees"
+format: 
+  html:
+    theme: morph
+    css: custom.css
+    toc: true
+    toc-location: right
+    toc-depth: 3
+    code-fold: true
+    list:
+      indent: false
+---
+
+# Executive Summary 
+[insert text]
+
+# Data Acquisition
+
+### NYC City Council District Boundaries
+```{r}
+#| message: false
+#| warning: false
+
+#library function to install package if needed
+library <- function(pkg){
+  pkg <- as.character(substitute(pkg))
+  options(repos = c(CRAN = "https://cloud.r-project.org"))
+  if(!require(pkg, character.only=TRUE, quietly=TRUE)) install.packages(pkg)
+  stopifnot(require(pkg, character.only=TRUE, quietly=TRUE))
+}
+
+library(httr2)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(DT)
+library(stringr)
+library(sf)
+library(jsonlite)
+
+if(!dir.exists(file.path("data", "mp03"))){
+  dir.create(file.path("data", "mp03"), showWarnings=FALSE, recursive=TRUE)
+}
+
+NYC_DISTRICT_BOUNDARIES_FILENAME <- file.path("data", "mp03", "nycc_25c.zip")
+
+if(!file.exists(NYC_DISTRICT_BOUNDARIES_FILENAME)){
+  download.file("https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/city-council/nycc_25c.zip", 
+                destfile=NYC_DISTRICT_BOUNDARIES_FILENAME)
+}
+
+unzip(NYC_DISTRICT_BOUNDARIES_FILENAME, exdir = file.path("data", "mp03"))
+
+#calling for unzipped folder
+NYC_DISTRICT_BOUNDARIES_UNZ_FILENAME <- file.path("data", "mp03", "nycc_25c")
+
+
+#step 4: reading file 
+nyc_boundaries <- st_read(file.path(NYC_DISTRICT_BOUNDARIES_UNZ_FILENAME, 
+                                   "nycc.shp"), quiet = TRUE)
+
+#crs= coordinate reference system
+nyc_boundaries <- st_transform(nyc_boundaries, crs="WGS84")
+```
+
+### NYC Tree Points
+
+```{r}
+#| message: false
+#| warning: false
+
+ENDPOINT <- "https://data.cityofnewyork.us/resource/hn5i-inap.json"
+
+BATCH_SIZE <- 50000
+OFFSET     <- 0
+END_OF_EXPORT <- FALSE
+ALL_DATA <- list()
+
+while(!END_OF_EXPORT){
+  cat("Requesting items", OFFSET, "to", BATCH_SIZE + OFFSET, "\n")
+  
+  req <- request(ENDPOINT) |>
+    req_url_query(`$limit`  = BATCH_SIZE, 
+                  `$offset` = OFFSET)
+  
+  resp <- req_perform(req)
+  
+  batch_data <- fromJSON(resp_body_string(resp))
+  
+  ALL_DATA <- c(ALL_DATA, list(batch_data))
+  
+  if(NROW(batch_data) != BATCH_SIZE){
+    END_OF_EXPORT <- TRUE
+    
+    cat("End of Data Export Reached\n")
+  } else {
+    OFFSET <- OFFSET + BATCH_SIZE
+  }
+}
+
+ALL_DATA <- bind_rows(ALL_DATA)
+cat("Data export complete:", NROW(ALL_DATA), "rows and", NCOL(ALL_DATA), "columns.")
+
+#saving as a rds file
+saveRDS(ALL_DATA, file = "data/mp03/nyc_trees_export.rds")
+cat("Data successfully saved to data/mp03/nyc_trees_export.rds\n")
+
+#reading nyc_trees_export.rds
+nyc_trees <- read_rds(file = "data/mp03/nyc_trees_export.rds")
+```
+
+
+# Data Integration and Initial Exploration
+
+### Plot All Tree Points
+```{r}
+#| message: false
+#| warning: false
+
+#changing the geometry column into spatial data 
+nyc_trees <- st_as_sf(nyc_trees, wkt = "geometry", crs = "WGS84")
+
+#plotting all the trees in nyc
+ggplot() +
+  geom_sf(data = nyc_boundaries, fill = "white", color = "black", linewidth = 0.5) +
+  geom_sf(data = nyc_trees, color = "forestgreen", alpha = 0.07, size = 0.3) +
+  theme_bw() +
+  labs(title = "NYC Trees within Council Districts",
+       subtitle = "NYC District Shoreline Boundaries ",
+       caption = "Source: NYC Open Data")
+```
+
+### District-Level Analysis of Tree Coverage
+
+Joining the Trees and NYC City Council District datasets
+
+```{r}
+tree_districts <- st_join(
+  nyc_trees, nyc_boundaries, join = st_intersects)
+```
+
+1. Which council district has the most trees?
+
+```{r}
+top_tree_count <- tree_districts |>
+  group_by(CounDist)|>
+  summarise(total_trees_per_area = n())|>
+  slice_max(total_trees_per_area, n = 1)|>
+  pull(CounDist)
+```
+
+**`r top_tree_count`** District has the most trees. 
+
+2. Which council district has the highest density of trees? 
+
+```{r}
+highest_density <- tree_districts |>
+  group_by(CounDist) |>
+  summarise(
+    total_trees_per_area = n(),
+    tree_density = total_trees_per_area / first(Shape_Area)) |>
+  slice_max(tree_density, n = 1) |>
+  pull(CounDist)
+```
+
+**`r highest_density`** District has the highest density of trees. 
+
+3. Which district has highest fraction of dead trees out of all trees?
+
+```{r}
+most_dead_ratio <- tree_districts |>
+  group_by(CounDist) |>
+  summarise(all = n(),
+            dead = sum(tpcondition == "Dead", na.rm = TRUE)) |>
+  mutate(fraction = dead/all) |>
+  arrange(desc(fraction)) |>
+  slice_head(n=1)|>
+  pull(CounDist)
+```
+**`r most_dead_ratio`** District had the highest fraction of dead trees out of all trees. 
+
+4. What is the most common tree species in Manhattan?
+
+```{r}
+top_tree_manhattan <- tree_districts |>
+  mutate( 
+    borough = case_when(
+      between(CounDist, 1,10) ~ 'Manhattan',
+      between(CounDist, 11,18) ~ 'Bronx',
+      between(CounDist, 19,32) ~ 'Queens',
+      between(CounDist, 33,48) ~ 'Brooklyn',
+      between(CounDist, 49,51) ~ 'Staten Island'
+    ))|>
+  filter(borough == 'Manhattan')|>
+  group_by(genusspecies)|>
+  summarise(species_count = n())|>
+  slice_max(species_count)|>
+  pull(genusspecies)
+```
+
+The most common tree in Manhattan is **`r top_tree_manhattan`**.
+
+5. What is the species of the tree closest to Baruch’s campus?
+
+```{r}
+#function to create a location point
+new_st_point <- function(lat, lon, ...){
+  st_sfc(point = st_point(c(lon, lat))) |>
+    st_set_crs("WGS84")
+}
+
+baruch_point <- new_st_point(40.7403, -73.9833)
+
+closest_tree <- tree_districts |>
+  mutate(distance = st_distance(geometry, baruch_point))|>
+  select(CounDist,distance, genusspecies)|>
+  slice_min(distance, n=1) |>
+  pull(genusspecies)
+```
+The closest tree to the Baruch Campus is a **`r closest_tree`**.
+
+# NYC Tree Project Proposal
+
+
+
+
