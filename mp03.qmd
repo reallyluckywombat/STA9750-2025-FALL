@@ -1,5 +1,5 @@
 ---
-title: "NYC Trees"
+title: "NYC Trees Analysis"
 format: 
   html:
     theme: morph
@@ -8,12 +8,11 @@ format:
     toc-location: right
     toc-depth: 3
     code-fold: true
-    list:
-      indent: false
 ---
 
 # Executive Summary 
-[insert text]
+
+This project combines geospatial data from NYC Planning and the NYC Forestry Tree Points to map all public trees across the city’s 51 council districts. By linking tree locations with district boundaries, I analyzed species distribution and identified areas with high concentrations of pollen-producing trees, particularly the London plane tree. These findings support a new strategy to reduce pollen exposure while maintaining a healthy and resilient urban forest.
 
 # Data Acquisition
 
@@ -68,7 +67,7 @@ nyc_boundaries <- st_transform(nyc_boundaries, crs="WGS84")
 
 ```{r}
 #| message: false
-#| warning: false
+#| results: 'hide'
 
 ENDPOINT <- "https://data.cityofnewyork.us/resource/hn5i-inap.json"
 
@@ -140,7 +139,7 @@ tree_districts <- st_join(
   nyc_trees, nyc_boundaries, join = st_intersects)
 ```
 
-1. Which council district has the most trees?
+1, Which council district has the most trees?
 
 ```{r}
 top_tree_count <- tree_districts |>
@@ -150,9 +149,9 @@ top_tree_count <- tree_districts |>
   pull(CounDist)
 ```
 
-**`r top_tree_count`** District has the most trees. 
+District **`r top_tree_count`** has the most trees. 
 
-2. Which council district has the highest density of trees? 
+2, Which council district has the highest density of trees? 
 
 ```{r}
 highest_density <- tree_districts |>
@@ -164,9 +163,9 @@ highest_density <- tree_districts |>
   pull(CounDist)
 ```
 
-**`r highest_density`** District has the highest density of trees. 
+District **`r highest_density`** has the highest density of trees. 
 
-3. Which district has highest fraction of dead trees out of all trees?
+3, Which district has highest fraction of dead trees out of all trees?
 
 ```{r}
 most_dead_ratio <- tree_districts |>
@@ -178,9 +177,9 @@ most_dead_ratio <- tree_districts |>
   slice_head(n=1)|>
   pull(CounDist)
 ```
-**`r most_dead_ratio`** District had the highest fraction of dead trees out of all trees. 
+District **`r most_dead_ratio`** had the highest fraction of dead trees out of all trees. 
 
-4. What is the most common tree species in Manhattan?
+4, What is the most common tree species in Manhattan?
 
 ```{r}
 top_tree_manhattan <- tree_districts |>
@@ -201,7 +200,7 @@ top_tree_manhattan <- tree_districts |>
 
 The most common tree in Manhattan is **`r top_tree_manhattan`**.
 
-5. What is the species of the tree closest to Baruch’s campus?
+5, What is the species of the tree closest to Baruch’s campus?
 
 ```{r}
 #function to create a location point
@@ -222,6 +221,190 @@ The closest tree to the Baruch Campus is a **`r closest_tree`**.
 
 # NYC Tree Project Proposal
 
+## Reduce Pollen NYC: A Targeted Approach to Allergy Relief
+
+According to the CDC, [25% of U.S. adults](https://www.cdc.gov/nchs/pressroom/releases/20230126.html?CDC_AAref_Val=https://www.cdc.gov/nchs/pressroom/nchs_press_releases/2022/20220126.htm) report experiencing seasonal allergies. In New York City, much of the springtime pollen is produced by the street trees, creating widespread discomfort and reducing quality of life for millions.
+
+One major contributor is the London plane tree (Platanus × acerifolia). A recent [USDA study](https://research.fs.usda.gov/treesearch/67341) found that this single species is responsible for approximately 34% of all pollen released in NYC. Unfortunately for many, the London plane tree is also the most abundant street tree in the city, making its impact on allergen levels especially significant.
+
+### Top 5 Most Abundant Trees in NYC
+```{r}
+top_tree <- tree_districts |>
+  st_drop_geometry() |>
+  filter(genusspecies != 'Unknown - Unknown')|>
+  group_by(genusspecies)|>
+  summarise(total = n())|>
+  arrange(desc(total))|>
+  slice_head(n=5)
+
+top_tree |>
+  rename('Species' = 'genusspecies')|>
+  rename('Total Tree Count' = 'total')|>
+  datatable(options=list(searching=FALSE, info=FALSE))
+```
+
+```{r}
+#Number of London plane tree that fit the conditions to remove
+tree_removal_count <- tree_districts |>
+  st_drop_geometry() |>
+  filter(genusspecies == 'Platanus x acerifolia - London planetree',
+         CounDist == 19)|>
+  group_by(tpcondition)|>
+  summarise(count = n()) |>
+  filter(tpcondition %in% c("Fair", 'Poor', "Dead", 'Critical')) |>
+  summarise(total_notgood = sum(count))|>
+  pull(total_notgood)
+```
+
+### Proposal Summary
+
+While removing all London plane trees is neither feasible nor ecologically advisable, we propose a targeted replacement strategy in NYC Council District 19.
+
+- Replace all London plane trees in fair, poor, dead, or critical condition
+- Replace them with Japanese zelkova (Zelkova serrata), a hardy and low-pollen alternative
+- Total number of eligible trees: **`r  tree_removal_count`**
+
+This approach addresses allergen reduction without compromising canopy coverage, as Japanese zelkova is well-suited to NYC’s climate, resilient to urban stressors, and offers comparable shade and aesthetic value.
+
+```{r}
+
+#manually applying colors to each condition
+condition_colors <- c(
+  "Excellent" = "darkgreen",
+  "Good" = "green",
+  "Fair" = "gold",
+  "Poor" = "orange",
+  "Dead" = "red",
+  "Critical" = "darkred",
+  "Unknown" = "grey30",
+  "Other Trees" = "grey80"
+)
+
+#selecting London Plane trees and categorizing by condition
+london_19 <- tree_districts  |>
+  filter(CounDist == 19)|>
+  mutate(
+    condition_cat = case_when(
+      genusspecies == 'Platanus x acerifolia - London planetree' ~ tpcondition,
+      TRUE ~ "Other Trees"
+    ),
+    #this uses the order of condition colors rather than alphabetical
+    condition_cat = factor(condition_cat, levels = names(condition_colors))
+  )
+
+#plotting all London Plane trees in District 19
+ggplot() +
+  geom_sf(data = london_19,
+          aes(color = condition_cat),
+          size = .4) +
+  scale_color_manual(values = condition_colors) +
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 3))) +   # makes legend dots bigger
+  theme_minimal() +
+  labs(
+    title = "London Plane Trees by Condition",
+    subtitle = "District 19 (Northeast Queens)",
+    color = "Condition"
+  ) +
+  theme(legend.position="bottom")
+```
+
+```{r}
+#| message: false
+
+#filtering for only london plane and japanese zelkova
+T5_trees <- tree_districts |>
+  filter(genusspecies %in% c('Platanus x acerifolia - London planetree', 
+                             'Zelkova serrata - Japanese zelkova')) |>
+  group_by(CounDist, genusspecies) |>
+  summarise(count = n())|>
+  ungroup()
+
+#top 10 districts with the highest count of london trees
+london <- tree_districts |>
+  st_drop_geometry() |>
+  filter(genusspecies == 'Platanus x acerifolia - London planetree') |>
+  group_by(CounDist, genusspecies) |>
+  summarise(count = n())|>
+  ungroup()|>
+  slice_max(count, n= 10)
+
+#creating variable to only list council districts column of previous code
+london_only <- london |>
+  select(CounDist)
+
+#Only calling for the council districts with the highest count of london trees
+#from T5_trees
+japanese_london <- T5_trees |>
+  filter(CounDist %in% london_only$CounDist)
+
+View(japanese_london)
+
+ggplot(japanese_london, aes(x = reorder(factor(CounDist), count), y = count, fill = genusspecies)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  theme_minimal() +
+  scale_fill_manual(
+    values = c(
+      'Platanus x acerifolia - London planetree' = 'orchid3', 
+      'Zelkova serrata - Japanese zelkova' = 'slateblue3'),
+    labels = c(
+      'Platanus x acerifolia - London planetree' = 'London plane', 
+      'Zelkova serrata - Japanese zelkova' = 'Japanese zelkova')) +
+  labs(
+    title = "Districts with the Highest Count of London plane Trees",
+    x = "Council District",
+    y = "Tree Count",
+    fill = "Species"
+  ) +
+  theme(legend.position = 'bottom')
+```
+
+### Why District 19?
+
+1. High Tree Volume
+: District 19 has the third-highest total tree population in NYC. Targeting an area with extensive tree density ensures meaningful improvements in air quality and allergen reduction.
+2. High Count of London Plane Trees
+: District 19 also ranks third-highest in the total number of London plane trees, making it a prime location where reductions can have a measurable impact.
+3. Logistical Efficiency
+: While Districts 46 and 50 have a higher total number of London plane trees, District 19 remains the most strategic starting point. It is located directly above District 23, which ranks fourth in both total tree count and number of London plane trees. Beginning in District 19 allows the project to expand naturally into District 23 if successful, reducing costs related to equipment relocation, labor, and operational planning.
+
+```{r}
+#5. map of district 23
+london_23 <- tree_districts  |>
+  filter(CounDist == 23)|>
+  mutate(
+    condition_cat = case_when(
+      genusspecies == 'Platanus x acerifolia - London planetree' ~ tpcondition,
+      TRUE ~ "Other Trees"
+    ),
+    #this uses the order of condition colors rather than alphabetical
+    condition_cat = factor(condition_cat, levels = names(condition_colors))
+  )
+
+# using the same condition colors as district 19
+
+ggplot() +
+  geom_sf(data = london_23,
+          aes(color = condition_cat),
+          size = .4) +
+  scale_color_manual(values = condition_colors) +
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 3))) +   # makes legend dots bigger
+  theme_minimal() +
+  labs(
+    title = "London Plane Trees by Condition",
+    subtitle = "District 23 (Northeast Queens)",
+    color = "Condition"
+  ) +
+  theme(legend.position="bottom")
+```
+
+### Conclusion
+
+Targeted replacement in District 19 offers a balanced, cost-effective way to reduce pollen production while maintaining NYC’s tree population. By prioritizing trees already in fair or worse condition, this proposal aligns ecological needs with the ultimate goal of creating a healthier environment for local residents.
 
 
 
