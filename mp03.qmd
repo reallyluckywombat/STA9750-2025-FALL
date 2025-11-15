@@ -361,7 +361,7 @@ ggplot(japanese_london, aes(x = reorder(factor(CounDist), count), y = count, fil
   theme(legend.position = 'bottom')
 ```
 
-### District 19- Northern East Queens
+### District 19- North Eastern Queens
 
 1. High Tree Volume
 : District 19 has the third-highest total tree population in NYC. Targeting an area with extensive tree density ensures meaningful improvements in air quality and allergen reduction.
