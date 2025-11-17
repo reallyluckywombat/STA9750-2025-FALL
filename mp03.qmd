@@ -139,10 +139,11 @@ tree_districts <- st_join(
   nyc_trees, nyc_boundaries, join = st_intersects)
 ```
 
-1, Which council district has the most trees?
+1) Which council district has the most trees?
 
 ```{r}
 top_tree_count <- tree_districts |>
+  st_drop_geometry() |>
   group_by(CounDist)|>
   summarise(total_trees_per_area = n())|>
   slice_max(total_trees_per_area, n = 1)|>
@@ -151,10 +152,13 @@ top_tree_count <- tree_districts |>
 
 District **`r top_tree_count`** has the most trees. 
 
-2, Which council district has the highest density of trees? 
+<br>
+
+2) Which council district has the highest density of trees? 
 
 ```{r}
 highest_density <- tree_districts |>
+  st_drop_geometry() |>
   group_by(CounDist) |>
   summarise(
     total_trees_per_area = n(),
@@ -165,10 +169,13 @@ highest_density <- tree_districts |>
 
 District **`r highest_density`** has the highest density of trees. 
 
-3, Which district has highest fraction of dead trees out of all trees?
+<br>
+
+3) Which district has highest fraction of dead trees out of all trees?
 
 ```{r}
 most_dead_ratio <- tree_districts |>
+  st_drop_geometry() |>
   group_by(CounDist) |>
   summarise(all = n(),
             dead = sum(tpcondition == "Dead", na.rm = TRUE)) |>
@@ -179,10 +186,13 @@ most_dead_ratio <- tree_districts |>
 ```
 District **`r most_dead_ratio`** had the highest fraction of dead trees out of all trees. 
 
-4, What is the most common tree species in Manhattan?
+<br>
+
+4) What is the most common tree species in Manhattan?
 
 ```{r}
 top_tree_manhattan <- tree_districts |>
+  st_drop_geometry() |>
   mutate( 
     borough = case_when(
       between(CounDist, 1,10) ~ 'Manhattan',
@@ -200,7 +210,9 @@ top_tree_manhattan <- tree_districts |>
 
 The most common tree in Manhattan is **`r top_tree_manhattan`**.
 
-5, What is the species of the tree closest to Baruch’s campus?
+<br>
+
+5) What is the species of the tree closest to Baruch’s campus?
 
 ```{r}
 #function to create a location point
@@ -209,7 +221,7 @@ new_st_point <- function(lat, lon, ...){
     st_set_crs("WGS84")
 }
 
-baruch_point <- new_st_point(40.7403, -73.9833)
+baruch_point <- new_st_point(40.74028, -73.98333)
 
 closest_tree <- tree_districts |>
   mutate(distance = st_distance(geometry, baruch_point))|>
@@ -303,7 +315,7 @@ ggplot() +
       override.aes = list(size = 3))) +   # makes legend dots bigger
   theme_minimal() +
   labs(
-    title = "London Plane Trees by Condition",
+    title = "London plane Trees by Condition",
     subtitle = "District 19 (Northeast Queens)",
     color = "Condition"
   ) +
@@ -312,14 +324,6 @@ ggplot() +
 
 ```{r}
 #| message: false
-
-#filtering for only london plane and japanese zelkova
-T5_trees <- tree_districts |>
-  filter(genusspecies %in% c('Platanus x acerifolia - London planetree', 
-                             'Zelkova serrata - Japanese zelkova')) |>
-  group_by(CounDist, genusspecies) |>
-  summarise(count = n())|>
-  ungroup()
 
 #top 10 districts with the highest count of london trees
 london <- tree_districts |>
@@ -334,13 +338,16 @@ london <- tree_districts |>
 london_only <- london |>
   select(CounDist)
 
-#Only calling for the council districts with the highest count of london trees
-#from T5_trees
-japanese_london <- T5_trees |>
-  filter(CounDist %in% london_only$CounDist)
+#Only calling for the council districts with the highest count of london trees, with Japanese Zelkova serrata tree counts
+japanese_london <- tree_districts |>
+  filter(CounDist %in% london_only$CounDist) |>
+  filter(genusspecies %in% c('Platanus x acerifolia - London planetree', 
+                             'Zelkova serrata - Japanese zelkova')) |>
+  group_by(CounDist, genusspecies) |>
+  summarise(count = n())|>
+  ungroup()
 
-View(japanese_london)
-
+#plotting!
 ggplot(japanese_london, aes(x = reorder(factor(CounDist), count), y = count, fill = genusspecies)) +
   geom_col(position = "dodge") +
   coord_flip() +
@@ -369,6 +376,34 @@ ggplot(japanese_london, aes(x = reorder(factor(CounDist), count), y = count, fil
 : District 19 also ranks third-highest in the total number of London plane trees, making it a prime location where reductions can have a measurable impact.
 3. Logistical Efficiency
 : While Districts 46 and 50 have a higher total number of London plane trees, District 19 remains the most strategic starting point. It is located directly above District 23, which ranks fourth in both total tree count and number of London plane trees. Beginning in District 19 allows the project to expand naturally into District 23 if successful, reducing costs related to equipment relocation, labor, and operational planning.
+
+```{r}
+#assigning colors to districts
+london_colors <- c(
+  "46" = "skyblue",
+  "50" = "seagreen",
+  "19" = "lightgreen",
+  '23' = "gold",
+  "other" = "grey80"
+)
+
+#plotting London plane from district 46,50,19,23
+featured_districts <- tree_districts |>
+  mutate(top_london = case_when(
+    CounDist %in% c(46,50,19,23) ~ as.character(CounDist),
+    TRUE ~ "other"
+  ),
+  top_london = factor(top_london, levels = names(london_colors)))
+
+ggplot(featured_districts) +
+  geom_sf(aes(color = top_london), size = 0.6) +
+  scale_color_manual(values = london_colors, name = "District") +
+  guides(
+    color = guide_legend(
+      override.aes = list(size = 3))) +
+  theme_minimal() +
+  labs(title = "Districts with Most London plane Trees")
+```
 
 ```{r}
 #5. map of district 23
