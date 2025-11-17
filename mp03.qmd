@@ -150,7 +150,7 @@ top_tree_count <- tree_districts |>
   pull(CounDist)
 ```
 
-District **`r top_tree_count`** has the most trees. 
+**District `r top_tree_count`** has the most trees. 
 
 <br>
 
@@ -167,7 +167,7 @@ highest_density <- tree_districts |>
   pull(CounDist)
 ```
 
-District **`r highest_density`** has the highest density of trees. 
+**District `r highest_density`** has the highest density of trees. 
 
 <br>
 
@@ -184,7 +184,7 @@ most_dead_ratio <- tree_districts |>
   slice_head(n=1)|>
   pull(CounDist)
 ```
-District **`r most_dead_ratio`** had the highest fraction of dead trees out of all trees. 
+**District `r most_dead_ratio`** had the highest fraction of dead trees out of all trees. 
 
 <br>
 
