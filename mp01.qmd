@@ -1,8 +1,13 @@
 ---
 title: "Mini-Project 01: Netflix Top 10 Analysis"
-format:
+format: 
   html:
-    theme: Flatly
+    theme: morph
+    css: custom.css
+    toc: true
+    toc-location: right
+    toc-depth: 3
+    code-fold: true
 ---
 
 2025 has been a blockbuster year for Netflix with standout releases like *Squid Games* Season 2, *Wednesday* Season 2, and animated debut of *KPOP Demon Hunters*. This momentum isn't slowing down. With the highly anticipated final season of *Stranger Things* still to come, Netflix's success is only set to grow. 
@@ -13,7 +18,7 @@ Let's take a deeper dive on the successful programming in the past few years.
 # Importing and Prepping Data
 ### Aquiring data from [Tudum](https://www.netflix.com/tudum/top10) by Netflix
 ```{r}
-#| code-fold: true
+
 if(!dir.exists(file.path("data", "mp01"))){
   dir.create(file.path("data", "mp01"), showWarnings=FALSE, recursive=TRUE)
 }
@@ -33,14 +38,17 @@ if(!file.exists(COUNTRY_TOP_10_FILENAME)){
 ```
 ### Loading packages
 ```{r}
-#| code-fold: true
+#| message: false
+
 if(!require("tidyverse")) install.packages("tidyverse")
 library(readr)
 library(dplyr)
 library(lubridate)
 ```
-### Importing Top 10 Global data
+### Importing Top 10 Global Data
 ```{r}
+#| message: false
+
 GLOBAL_TOP_10 <- read_tsv(GLOBAL_TOP_10_FILENAME)
 ```
 ## Task 2: Data Cleaning
@@ -52,18 +60,19 @@ GLOBAL_TOP_10 <- GLOBAL_TOP_10 |>
 ## Task 3: Data Import
 Importing Top 10 Country Data
 ```{r}
+#| message: false
+
 COUNTRY_TOP_10 <- read_tsv(COUNTRY_TOP_10_FILENAME, na = 'N/A')
 ```
 
 ## Initial Data Exploration
 ```{r}
-#| code-fold: true
+#| message: false
 if(!require("DT"))
 library(DT)
 ```
 ### Let's take a peek of the Global Top 10 data
 ```{r}
-#| code-fold: true
 GLOBAL_TOP_10 |> 
   head(n=20) |>
   datatable(options=list(searching=FALSE, info=FALSE))
@@ -142,14 +151,15 @@ in the Global Top 10 chart;it is **`r runtime_longest_3`** minutes long.
 
 ### 4. For each of the four categories, what program has the most total hours of global viewership?
 ```{r}
-#| code-fold: true
+#| message: false
 GLOBAL_TOP_10 |> 
   filter(category %in% c('Films (English)', 'Films (Non-English)', 'TV (Non-English)', 'TV (English)')) |>
   group_by(category, show_title) |>
   summarise(total_hours_view = sum(weekly_hours_viewed)) |>
   slice_max(total_hours_view) |>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))|>
-  formatRound(c('total_hours_view'))
+  formatRound(c('Total Hours View'))
 ```
 
 ### 5. Which TV show had the longest run in a country’s Top 10? How long was this run and in what country did it occur?
@@ -296,6 +306,7 @@ STRANGER_THINGS <- GLOBAL_TOP_10 |>
 STRANGER_THINGS |>
   group_by(season_title) |>
   summarise(total_hours_viewed = sum(weekly_hours_viewed))|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 The table shows that seasons 1-3 were consistent in watch time while season 4 has a significantly higher count with over 1.5 trillion more hours watched. In order to understand this significant difference, let's take a gander at previous season information. 
@@ -311,6 +322,7 @@ ST_release_schedule <- data.frame(
 ST_release_schedule |> 
   format_titles() |>
   head(n=8) |>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 release date source: [IMDB](https://www.imdb.com/title/tt4574334/episodes/?season=1&ref_=ttep)
@@ -337,6 +349,7 @@ ST_last_week <- STRANGER_THINGS |>
 STRANGER_THINGS |>
   group_by(season_title) |>
   summarise(weeks_in_top_10 = max(cumulative_weeks_in_top_10))|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 All 4 seasons charted in the Global Top 10 for at least 10 weeks! Let's compare to other English language tv shows in the Global Top 10. 
@@ -354,6 +367,7 @@ GLOBAL_TOP_10 |>
   group_by(show_title)|>
   summarise(weeks_spent_in_top_10 = max(cumulative_weeks_in_top_10))|>
   slice_max(weeks_spent_in_top_10, n=10)|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 Out of all **`r st_total_show_count`** English Language TV Shows on Netflix, *Stranger Things* is the fifth highest-charting TV show in the Top 10! Because *Wednesday* Season 1 was released in 2022, we have more complete data on its cumulative weeks in the Top 10, which is important to remember when comparing the two shows. 
@@ -366,6 +380,7 @@ COUNTRY_TOP_10 |>
   group_by(country_name) |>
   summarise(total_weeks_in_top_10 = max(cumulative_weeks_in_top_10))|>
   arrange(desc(total_weeks_in_top_10)) |>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 *Stranger Things* charted in 93 countries and held a spot in the Global Top 10 for multiple consecutive weeks. The data clearly highlights its massive global impact, with record-breaking viewership numbers  confirming its place as one of Netflix’s most successful shows. The final season will start streaming November 26th this year!
@@ -410,6 +425,7 @@ india_top_10|>
   group_by(show_title)|>
   summarise(weeks_in_top_10 = max(cumulative_weeks_in_top_10))|>
   slice_max(weeks_in_top_10, n=8)|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 *Haseen Dillruba* spent 21 weeks in India's top 10! Let's look at the movie's success in detail. 
@@ -420,6 +436,7 @@ india_top_10|>
 india_top_10 |>
   filter(show_title == 'Haseen Dillruba')|>
   select(week,weekly_rank,cumulative_weeks_in_top_10)|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 This is interesting; *Haseen Dillruba* first debuted in the Top 10 in the summer of 2021, and then made a return in the summer of 2024. This suggests that even older content can experience renewed popularity and chart-topping performace over time. Next, lets take a look at TV shows. 
@@ -432,6 +449,7 @@ india_top_10|>
   group_by(show_title)|>
   summarise(weeks_in_top_10 = max(cumulative_weeks_in_top_10))|>
   slice_max(weeks_in_top_10, n=10)|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 
@@ -443,6 +461,7 @@ india_top_10 |>
   group_by(season_title)|>
   summarise(cumulative_weeks_in_top_10 = max(cumulative_weeks_in_top_10))|>
   select(season_title, cumulative_weeks_in_top_10)|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 The table shows that each season spent at least 14 weeks in the top 10, a strong sign of consistent performance. Similar to the film *Haseen Dillruba*, this suggests a pattern of sustained audience interest over time. Now, let’s take a look at how The *Great Indian Kapil Show* performed globally.
@@ -456,6 +475,7 @@ GLOBAL_TOP_10|>
   summarise(total_views = sum(weekly_views),
             highest_rank = min(weekly_rank),
             weeks_charted = max(cumulative_weeks_in_top_10))|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 *The Great Indian Kapil Show* broke into the Global Top 10, becoming the ["first Indian series on Netflix to trend" worldwide for four weeks](https://www.dnaindia.com/bollywood/report-this-show-is-first-indian-series-on-netflix-to-trend-globally-the-great-indian-kapil-show-3087039). Its success signals not just strong local interest, but a growing international appetite for Indian programming.
@@ -486,6 +506,7 @@ kdh_total_views<- GLOBAL_TOP_10 |>
 GLOBAL_TOP_10|>
   filter(show_title == 'KPop Demon Hunters')|>
   select(week, weekly_rank, cumulative_weeks_in_top_10)|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 ```
 *KPOP Demon Hunter* premiered on Netflix on June 20, 2025. In its first week, it debuted at #2 on the global charts and has consistently remained in the top two ever since. Now, let's take a step back and explore how *KDH* has performed across different countries.  
@@ -499,6 +520,7 @@ COUNTRY_TOP_10 |>
   group_by(country_name)|>
   summarise(total_weeks_kdp = max(cumulative_weeks_in_top_10))|>
   arrange(desc(total_weeks_kdp))|>
+  format_titles() |>
   datatable(options=list(searching=FALSE, info=FALSE))
 
 kdh_country_count <- COUNTRY_TOP_10 |>
@@ -506,6 +528,6 @@ kdh_country_count <- COUNTRY_TOP_10 |>
 ```
 Insanity. KPOP Demon Hunters has topped the charts for at least 12 weeks in **93 out of `r kdh_country_count`** countries. The honmoon is sealing globally (yes, that only makes sense if you’ve seen the movie).
 
-Even if animated films or K-pop aren't your thing, the numbers might be enough to make you wonder: is this movie worth a watch? You can now stream the #1 all time top movie on Netflix. jk
+Even if animated films or K-pop aren't your thing, the numbers might be enough to make you wonder: is this movie worth a watch? You can now stream the #1 all time top movie on Netflix. 
 
 ### It’s been a record-breaking year for Netflix, with exciting new programming, a growing global presence, and the continued success of its existing shows. Who knows, 2026 might be even more groundbreaking!
