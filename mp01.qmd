@@ -607,7 +607,7 @@ kdh_total_views<- GLOBAL_TOP_10 |>
 ```
 *KDH* already garnered **`r format(kdh_total_views, big.mark = ",", scientific = FALSE)`** views. Earlier in the exploratory data analysis, we learn that *Red Notice*, Netflix's second all time most popular movie, recieved **`r format(view_count_8, big.mark = ",", scientific = FALSE)`** views in 2021. This comparison highlights the record-breaking success KPOP Demon Hunters is achieving.
 
-### Number of Weeks KDP spent in the Global Top 10
+### Number of Weeks KDH spent in the Global Top 10
 ```{r}
 #| code-fold: true
 GLOBAL_TOP_10|>
