@@ -41,9 +41,13 @@ if(!file.exists(COUNTRY_TOP_10_FILENAME)){
 #| message: false
 
 if(!require("tidyverse")) install.packages("tidyverse")
+if(!require("crosstalk")) install.packages("crosstalk")
+if(!require("plotly")) install.packages("plotly")
 library(readr)
 library(dplyr)
 library(lubridate)
+library(crosstalk)
+library(plotly)
 ```
 ### Importing Top 10 Global Data
 ```{r}
@@ -126,6 +130,108 @@ longest_chart_streak <- GLOBAL_TOP_10 |>
   pull(cumulative_weeks_in_top_10)
 ```
 **`r longest_charting_film`** spent the most cumulative weeks in the global top 10 out of all the Non-English Films for **`r longest_chart_streak`** weeks.
+
+### Top 10 Longest-Running Programming by Category
+
+```{r}
+# bar graph of the top 10 shows with the longest run in Global top 10
+longest_tv_english <- GLOBAL_TOP_10 |>
+  filter(category == "TV (English)") |>
+  group_by(show_title) |>
+  summarise(total_weeks_in_top10 = max(cumulative_weeks_in_top_10)) |>
+  slice_max(total_weeks_in_top10, n = 10)
+
+longest_tv_non <- GLOBAL_TOP_10 |>
+  filter(category == "TV (Non-English)") |>
+  group_by(show_title) |>
+  summarise(total_weeks_in_top10 = max(cumulative_weeks_in_top_10)) |>
+  slice_max(total_weeks_in_top10, n = 10)
+
+longest_film_english <- GLOBAL_TOP_10 |>
+  filter(category == "Films (English)") |>
+  group_by(show_title) |>
+  summarise(total_weeks_in_top10 = max(cumulative_weeks_in_top_10)) |>
+  slice_max(total_weeks_in_top10, n = 10)
+
+longest_film_non <- GLOBAL_TOP_10 |>
+  filter(category == "Films (Non-English)") |>
+  group_by(show_title) |>
+  summarise(total_weeks_in_top10 = max(cumulative_weeks_in_top_10)) |>
+  slice_max(total_weeks_in_top10, n = 10)
+
+# Combine datasets and label categories
+all_top <- bind_rows(
+  longest_tv_english |> mutate(category = "TV (English)"),
+  longest_tv_non |> mutate(category = "TV (Non-English)"),
+  longest_film_english |> mutate(category = "Films (English)"),
+  longest_film_non |> mutate(category = "Films (Non-English)"))
+
+categories <- unique(all_top$category)
+
+fig <- plot_ly()
+
+for (cat in categories) {
+  df <- all_top |> filter(category == cat)|>
+    mutate(show_title = factor(show_title, levels = show_title)) 
+  
+  fig <- fig %>% add_trace(
+    data = df,
+    x = ~total_weeks_in_top10,
+    y = ~show_title,
+    type = "bar",
+    orientation = "h",
+    name = cat,
+    visible = ifelse(cat == categories[1], TRUE, FALSE)
+  )
+}
+
+# Build buttons that update trace visibility + Y axis labels
+buttons <- lapply(seq_along(categories), function(i) {
+  
+  this_cat <- categories[i]
+  
+  # Visibility vector
+  vis_vec <- rep(FALSE, length(categories))
+  vis_vec[i] <- TRUE
+  
+  # Y-axis labels ONLY for this category
+  y_vals <- all_top %>%
+    filter(category == this_cat) %>%
+    pull(show_title)
+  
+  list(
+    method = "update",
+    args = list(
+      list(visible = vis_vec),
+      list(yaxis = list(
+        title = "Programming",
+        categoryorder = "array",
+        categoryarray = y_vals
+      ))),
+    label = this_cat)
+})
+
+fig <- fig %>%
+  layout(
+    title = "Top 10 Longest-Running Programming by Category",
+    xaxis = list(title = "Total Weeks in Top 10"),
+    yaxis = list(title = "Programming"),
+    margin = list(l = 220), 
+    updatemenus = list(
+      list(
+        active = 0,
+        buttons = buttons,
+        x = -0.4,
+        y = 1,
+        xanchor = "right",
+        yanchor = "top"
+      )
+    )
+  )
+
+fig
+
+```
 
 ### 3. What is the longest film (English or non-English) to have ever appeared in the Netflix global Top 10? How long is it in minutes?
 ```{r}
