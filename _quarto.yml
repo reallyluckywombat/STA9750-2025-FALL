@@ -1,11 +1,7 @@
 project:
   type: website
   output-dir: docs
-  render: 
-    - #mp01.qmd
-    - #mp02.qmd
-    - #mp03.qmd
-    - mp04.qmd
+
 
 website:
   title: "STA 9750 Submission Material"
