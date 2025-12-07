@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="quarto-1.7.32" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+
+
+<title>Mini-Project 01: Netflix Top 10 Analysis – STA 9750 Submission Material</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+<!-- htmldependencies:E3FAD763 -->
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<link href="site_libs/htmltools-fill-0.5.8.1/fill.css" rel="stylesheet" />
+<script src="site_libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<link href="site_libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet" />
+<script src="site_libs/datatables-binding-0.34.0/datatables.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<link href="site_libs/dt-core-1.13.6/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="site_libs/dt-core-1.13.6/css/jquery.dataTables.extra.css" rel="stylesheet" />
+<script src="site_libs/dt-core-1.13.6/js/jquery.dataTables.min.js"></script>
+<link href="site_libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet" />
+<script src="site_libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
+<script src="site_libs/plotly-binding-4.11.0/plotly.js"></script>
+<script src="site_libs/typedarray-0.1/typedarray.min.js"></script>
+<link href="site_libs/plotly-htmlwidgets-css-2.11.1/plotly-htmlwidgets.css" rel="stylesheet" />
+<script src="site_libs/plotly-main-2.11.1/plotly-latest.min.js"></script>
+
+
+<link rel="stylesheet" href="custom.css" />
+</head>
+
+<body>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="/index.html">
+    <span class="navbar-title">STA 9750 Submission Material</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <div id="quarto-toc-target"></div>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Mini-Project 01: Netflix Top 10 Analysis</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+<nav id="TOC" role="doc-toc">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#importing-and-prepping-data" id="toc-importing-and-prepping-data">Importing and Prepping Data</a>
+  <ul>
+  <li><a href="#aquiring-data-from-tudum-by-netflix" id="toc-aquiring-data-from-tudum-by-netflix">Aquiring data from Tudum by Netflix</a></li>
+  <li><a href="#loading-packages" id="toc-loading-packages">Loading packages</a></li>
+  <li><a href="#importing-top-10-global-data" id="toc-importing-top-10-global-data">Importing Top 10 Global Data</a></li>
+  <li><a href="#task-2-data-cleaning" id="toc-task-2-data-cleaning">Task 2: Data Cleaning</a></li>
+  <li><a href="#task-3-data-import" id="toc-task-3-data-import">Task 3: Data Import</a></li>
+  <li><a href="#initial-data-exploration" id="toc-initial-data-exploration">Initial Data Exploration</a>
+  <ul>
+  <li><a href="#lets-take-a-peek-of-the-global-top-10-data" id="toc-lets-take-a-peek-of-the-global-top-10-data">Let’s take a peek of the Global Top 10 data</a></li>
+  <li><a href="#final-look-at-cleaned-dataset" id="toc-final-look-at-cleaned-dataset">Final look at cleaned dataset</a></li>
+  </ul></li>
+  </ul></li>
+  <li><a href="#task-4-exploratory-data-analysis" id="toc-task-4-exploratory-data-analysis">Task 4: Exploratory Data Analysis</a>
+  <ul>
+  <li><a href="#how-many-different-countries-does-netflix-operate-in" id="toc-how-many-different-countries-does-netflix-operate-in">1. How many different countries does Netflix operate in?</a></li>
+  <li><a href="#which-non-english-language-film-has-spent-the-most-cumulative-weeks-in-the-global-top-10-how-many-weeks-did-it-spend" id="toc-which-non-english-language-film-has-spent-the-most-cumulative-weeks-in-the-global-top-10-how-many-weeks-did-it-spend">2. Which non-English-language film has spent the most cumulative weeks in the global top 10? How many weeks did it spend?</a></li>
+  <li><a href="#top-10-longest-running-programming-by-category" id="toc-top-10-longest-running-programming-by-category">Top 10 Longest-Running Programming by Category</a></li>
+  <li><a href="#what-is-the-longest-film-english-or-non-english-to-have-ever-appeared-in-the-netflix-global-top-10-how-long-is-it-in-minutes" id="toc-what-is-the-longest-film-english-or-non-english-to-have-ever-appeared-in-the-netflix-global-top-10-how-long-is-it-in-minutes">3. What is the longest film (English or non-English) to have ever appeared in the Netflix global Top 10? How long is it in minutes?</a></li>
+  <li><a href="#for-each-of-the-four-categories-what-program-has-the-most-total-hours-of-global-viewership" id="toc-for-each-of-the-four-categories-what-program-has-the-most-total-hours-of-global-viewership">4. For each of the four categories, what program has the most total hours of global viewership?</a></li>
+  <li><a href="#which-tv-show-had-the-longest-run-in-a-countrys-top-10-how-long-was-this-run-and-in-what-country-did-it-occur" id="toc-which-tv-show-had-the-longest-run-in-a-countrys-top-10-how-long-was-this-run-and-in-what-country-did-it-occur">5. Which TV show had the longest run in a country’s Top 10? How long was this run and in what country did it occur?</a></li>
+  <li><a href="#netflix-provides-over-200-weeks-of-service-history-for-all-but-one-country-in-our-data-set.-which-country-is-this-and-when-did-netflix-cease-operations-in-that-country" id="toc-netflix-provides-over-200-weeks-of-service-history-for-all-but-one-country-in-our-data-set.-which-country-is-this-and-when-did-netflix-cease-operations-in-that-country">6. Netflix provides over 200 weeks of service history for all but one country in our data set. Which country is this and when did Netflix cease operations in that country?</a></li>
+  <li><a href="#what-is-the-total-viewership-of-the-tv-show-squid-game" id="toc-what-is-the-total-viewership-of-the-tv-show-squid-game">7. What is the total viewership of the TV show Squid Game?</a></li>
+  <li><a href="#approximately-how-many-views-did-red-notice-receive-in-2021" id="toc-approximately-how-many-views-did-red-notice-receive-in-2021">8. Approximately how many views did Red Notice receive in 2021?</a></li>
+  <li><a href="#how-many-films-reached-number-1-in-the-us-but-did-not-originally-debut-there-what-is-the-most-recent-film-to-pull-this-off" id="toc-how-many-films-reached-number-1-in-the-us-but-did-not-originally-debut-there-what-is-the-most-recent-film-to-pull-this-off">9. How many Films reached Number 1 in the US but did not originally debut there? What is the most recent film to pull this off?</a></li>
+  <li><a href="#which-tv-showseason-hit-the-top-10-in-the-most-countries-in-its-debut-week-in-how-many-countries-did-it-chart" id="toc-whic
