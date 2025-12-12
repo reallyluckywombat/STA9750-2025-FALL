@@ -141,6 +141,20 @@ get_total_nonfarm_payroll <- function(){
 TOTAL_EMPLOYMENT <- get_total_nonfarm_payroll()
 ```
 
+### Cleaned Employment Dataset 
+```{r}
+TOTAL_EMPLOYMENT |>
+  format_titles() |>
+  datatable(
+    options = list(
+      ordering = FALSE,
+      searching = FALSE  
+    ),
+    rownames = FALSE
+  )|>
+  formatRound("Level", digits = 0)
+```
+
 # Task 2: Download CES Revisions Tables
 Using a similar method as the previous task, I downloaded the revisions data for each month from January 1979 to July 2025. I will only be using the final revision out of the three for my analysis. 
 
@@ -201,6 +215,20 @@ get_bls_ces_revisions <- function(start_year=1979, end_year=2025) {
 REVISIONS_DATA <- get_bls_ces_revisions()
 ```
 
+### Cleaned Revision Dataset 
+```{r}
+REVISIONS_DATA|>
+  format_titles() |>
+  datatable(
+    options = list(
+      ordering = FALSE,
+      searching = FALSE  
+    ),
+    rownames = FALSE
+  )|>
+  formatRound(c('Original', 'Final'), digits = 0)
+```
+
 ## Finalized Dataset
 
 Now that both total employment level and the revisions datasets are cleaned and downloaded, I joined them using the `date` column. 
@@ -212,6 +240,18 @@ BLS_JOINED <- TOTAL_EMPLOYMENT |>
   inner_join(REVISIONS_DATA, join_by(date))
 ```
 
+```{r}
+BLS_JOINED |>
+  format_titles() |>
+  datatable(
+    options = list(
+      ordering = FALSE,
+      searching = FALSE  
+    ),
+    rownames = FALSE
+  )|>
+  formatRound(c('Level','Original', 'Final'), digits = 0)
+```
 
 # Task 3: Data Exploration and Visualization
 
