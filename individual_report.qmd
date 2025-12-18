@@ -1,0 +1,1433 @@
+---
+title: "How does Supermarket Accessibility Vary Across the United States?"
+format: 
+  html:
+    theme: Flatly
+    toc: true
+    toc-location: right
+    toc-depth: 3
+    code-fold: true
+---
+
+# Executive Summary 
+
+This analysis addresses a primary **research question: How does supermarket accessibility vary across the United States?** This work is one component of a larger collaborative analysis investigating whether "food deserts" are linked to chronic health outcomes, such as diabetes. While my teammates analyzed income levels, fast-food density, and health statistics to build a comprehensive Linear Regression model, my focus is on the spatial distribution of low food access.
+
+By integrating the **USDA Food Access Research Atlas** with the **ACS 2019 Population Dataset**, I map and analyze where the physical distance to quality food is most significant. Finally, I run a logistic regression model to evaluate how effectively socioeconomic factors such as poverty levels, SNAP enrollment, and household vehicle access, can predict whether a census tract is classified as 'Low Access.' This statistical approach allows me to move beyond simple mapping and quantify which factors most significantly influence food insecurity in the U.S.
+
+### Technical Setup
+Before importing the datasets, I initiated a standardized workflow by creating a dedicated data directory (if one did not already exist), loading the necessary R libraries, and defining custom functions for title formatting and data cleaning. This ensures the analysis is both reproducible and organized.
+```{r}
+#| warning: false
+
+library <- function(pkg){
+  pkg <- as.character(substitute(pkg))
+  options(repos = c(CRAN = "https://cloud.r-project.org"))
+  if(!require(pkg, character.only=TRUE, quietly=TRUE)) install.packages(pkg)
+  stopifnot(require(pkg, character.only=TRUE, quietly=TRUE))
+}
+
+library(tidyverse)
+library(stringr)
+library(readr) 
+library(ggplot2)
+library(DT)
+library(knitr)
+library(kableExtra)
+library(scales)
+library(broom)
+
+format_titles <- function(df){
+  minor_words <- c("and", "of", "the", "in", "by", "for", "to", "or", "a", "an")
+  new_names <- str_replace_all(colnames(df), "_", " ") |>
+    str_to_title()
+  for (word in minor_words) {
+    pattern <- paste0("\\b", tools::toTitleCase(word), "\\b")
+    replacement <- paste0(word)
+    new_names <- str_replace_all(new_names, pattern, replacement)
+  }
+  colnames(df) <- new_names
+  df} 
+
+format_mil <- label_number(accuracy = 0.1, 
+                        scale = 1e-6, 
+                        suffix = " Million")
+
+# ---- Creating data folder ----
+if(!dir.exists(file.path("data", "final"))){
+  dir.create(file.path("data", "final"), showWarnings=FALSE, recursive=TRUE)
+}
+```
+
+# USDA [Food Access Research Atlas](https://www.ers.usda.gov/data-products/food-access-research-atlas) Dataset (FARA)
+
+The USDA recognizes that food accessibility is a complex issue influenced by factors like public transportation, household income, and vehicle availability. To account for these variables, the FARA defines **"Low Access" based on the physical distance to the nearest supermarket**. Specifically, a census tract is flagged if at least 500 people, or 33% of the population, live beyond the following thresholds:
+
+- **Half-and-10**: Residents are more than 0.5 miles (Urban) or 10 miles (Rural) from a supermarket.
+- **1-and-10**: Residents are more than 1 mile (Urban) or 10 miles (Rural) from a supermarket.
+- **1-and-20**: Residents are more than 1 mile (Urban) or 20 miles (Rural) from a supermarket.
+
+The dataset offers two primary lenses: "Low Income and Low Access" (LILA) and general "Low Access." For this analysis, **I focus exclusively on Low Access.** By removing the income constraint from the primary metric, I maintain better control over the variables and isolate the relationship between geography and infrastructure for more accurate findings.
+
+The USDA releases the FARA around every five years, with the most recent being the 2019 FARA. This Atlas aggregated 2019 supermarket data, 2018 ACS 5-year estimates, and 2010 US Census population data. Because of this cycle, my analysis represents a specific "snapshot" in time which is essential to keep in mind as we interpret the results.
+
+### Downloading Dataset
+This code downloads and unzips the static file that the USDA offers only if not found locally. 
+
+```{r}
+#| warning: false
+
+FOOD_FILENAME <- file.path("data", "final", "2019 Food Access Research Atlas Data.zip")
+
+if(!file.exists(FOOD_FILENAME)){
+  download.file("https://ers.usda.gov/sites/default/files/_laserfiche/DataFiles/80591/2019%20Food%20Access%20Research%20Atlas%20Data.zip", 
+                destfile=FOOD_FILENAME)
+}
+
+if(!file.exists(FOOD_FILENAME)){
+  unzip(FOOD_FILENAME, exdir = file.path("data", "final"))
+}
+
+FOOD_ATLAS_FILENAME <- file.path("data", "final", "Food Access Research Atlas.csv")
+```
+
+### Data Cleaning Notes
+
+```{r}
+#| warning: false
+
+FOOD_ATLAS <- read_csv(FOOD_ATLAS_FILENAME) |>
+  select(
+    "CensusTract", "State", "County", "Urban",
+    "LowIncomeTracts", "LA1and10", "LAhalfand10", "LA1and20",
+    "PovertyRate",  "OHU2010", "TractHUNV", "TractSNAP", "Pop2010",
+    "LAPOP1_10","LAPOP05_10","LAPOP1_20"
+  )
+
+missing_zero_tracts <- FOOD_ATLAS |>
+  mutate(geoid_length = str_length(CensusTract))|>
+  count(geoid_length) |>
+  filter(geoid_length == 10) |>
+  pull(n)
+
+FOOD_ATLAS <- FOOD_ATLAS |>
+  mutate(
+    CensusTract = str_pad(
+      string = as.character(CensusTract),
+      width = 11,
+      pad = "0",
+      side = "left"
+    )
+  )
+
+# Checking the that all tracts are 11 digits
+#FOOD_ATLAS |>
+  #mutate(geoid_length = str_length(CensusTract)) |>
+  #count(geoid_length, sort = TRUE)
+
+FOOD_ATLAS <- FOOD_ATLAS |>
+  mutate(LAPOP1_10 = as.numeric(LAPOP1_10),
+         LAPOP05_10 = as.numeric(LAPOP05_10),
+         LAPOP1_20 = as.numeric(LAPOP1_20),
+         LAPOP1_10 = replace_na(LAPOP1_10, 0),
+         LAPOP05_10 = replace_na(LAPOP05_10, 0),
+         LAPOP1_20 = replace_na(LAPOP1_20, 0))
+```
+The following steps were taken to prepare the FARA data:
+
+- **Column Selection**: only selected the necessary 16 columns from the original 47 to create a more focused workspace.
+
+- **GEOID Standardization**: The `CensusTract` column is standardized to the required 11-digit (FIPS) code format. A total of **`r comma(missing_zero_tracts)`** tracts are padded with a leading zero to ensure accurate spatial joining with the ACS population data. 
+
+- **Data Type and Missing Value**: The Low Access Population count variables (`LAPOP1_10`, `LAPOP05_10`, `LAPOP1_20`) are converted to numeric data types. Additionally, all NA were replaced with 0 values. 
+
+### FARA Dataset Preview
+::: {.callout-note}
+## USDA FARA Variable Dictionary
+`Urban`, `Low Income`, `1 and 10`, `Half and 10`, and `1 and 20`  are dummy variables, where a value of 1 signifies that the census tract meets the stated criteria (Yes), and a value of 0 signifies that it does not (No).
+```{r dictionary_table}
+# 1. Create the data frame from your dictionary
+dictionary_df <- tribble(
+  ~`Column Name`, ~Description,
+  "Urban", "Flag for urban census tract.",
+  "Low Income", "Flag for low income census tract.",
+  "1 and 10", "Flag for low access tract (1 mile for urban, 10 miles for rural).",
+  "Half and 10", "Flag for low access tract (1/2 mile for urban, 10 miles for rural).",
+  "1 and 20", "Flag for low access tract (1 mile for urban, 20 miles for rural).",
+  "Poverty %", "Share of the tract population living with income at or below the Federal poverty thresholds.",
+  "OHU2010", "Occupied housing unit count from 2010 census.", 
+  "TractHUNV", "Total count of housing units without a vehicle in the tract.",
+  "TractSNAP", "Total count of housing units receiving SNAP benefits in the tract.",
+  "Pop2010", "Population count from the 2010 census.",
+  "Pop 1 and 10", "Population count beyond 1 mile (urban) or 10 miles (rural) from a supermarket.",
+  "Pop Half and 10", "Population count beyond 1/2 mile (urban) or 10 miles (rural) from a supermarket.",
+  "Pop 1 and 20", "Population count beyond 1 mile (urban) or 20 miles (rural) from a supermarket."
+)
+
+# 2. Use kable to format the table with specified column widths
+dictionary_df |> 
+  mutate(`Column Name` = cell_spec(`Column Name`, bold = TRUE)) |> # Bolds the first column
+  kable(
+    format = "html", 
+    escape = FALSE, # Allows HTML for bolding
+    col.names = c("Column Name", "Description"),
+    # Set the width of the columns! 20% for the first, 80% for the second.
+    col.widths = c("20%", "80%") 
+  )
+```
+:::
+
+```{r}
+FOOD_ATLAS |>
+  rename("Census Tract" = "CensusTract",
+         "Low Income" = "LowIncomeTracts",
+         "1 and 10" = "LA1and10",
+         "Half and 10" = "LAhalfand10", 
+         "1 and 20" = "LA1and20",
+         "Poverty %" = "PovertyRate",
+         "Pop 1 and 10" = "LAPOP1_10",
+         "Pop Half and 10" = "LAPOP05_10",
+         "Pop 1 and 20" = "LAPOP1_20") |>
+  head(n =10) |> 
+  datatable(options=list(searching=FALSE, info=FALSE, dom = 'tip', pageLength = 5)) |>
+  formatRound(c("Pop2010", "Pop 1 and 10","Pop Half and 10",  "Pop 1 and 20"), digits = 0)
+```
+
+# U.S Census ACS Population Dataset
+
+### About the dataset
+[insert background information and why i chose to download this information]
+
+### Downloading Dataset
+
+```{r}
+#| message: false
+#| warning: false
+
+
+library(tidycensus)
+library(tigris)
+library(sf)
+library(tidyr)
+
+# Census API Key (only needed once)
+#census_api_key("1885fa1a37974bd72e037147e7e0b715bbcbfd37", install = TRUE)
+
+if (Sys.getenv("CENSUS_API_KEY") == "") {
+  stop("CENSUS_API_KEY environment variable not found.
+        Please obtain a Census API key from 
+        https://api.census.gov/data/key_signup.html and then run:
+        tidycensus::census_api_key('YOUR_KEY_HERE', install = TRUE)
+        ", call. = FALSE)
+}
+
+# --- Define the file path for the final saved object ---
+POPULATION_FILENAME <- file.path("data", "final", "us_census_population_geo.rds")
+
+# --- Only run the download/process block if the file does NOT exist ---
+if (!file.exists(POPULATION_FILENAME)) {
+  
+  message("File not found locally. Starting download and processing...")
+  
+  options(tigris_use_cache = TRUE)
+  
+  # 1. Prepare FIPS codes
+  fips_codes <- unique(fips_codes$state)[1:51]
+  fips_codes <- fips_codes[!(fips_codes %in% c("72", "78", "60", "66", "69"))]
+  
+  all_tract_data_list <- list()
+  all_tract_geometry_list <- list()
+  
+  # Loop to download both ACS data and Geometry
+  for (fips in fips_codes) {
+    all_tract_data_list[[fips]] <- get_acs(
+      geography = "tract",
+      table = "B01003",
+      state = fips,
+      year = 2019,
+      output = "wide"
+    )
+    
+    all_tract_geometry_list[[fips]] <- tracts(
+      state = fips,
+      year = 2019,
+      class = "sf"
+    )
+  }
+  
+  # Combine Data and Geometry
+  POPULATION <- do.call(rbind, all_tract_data_list)
+  TRACT_GEOMETRY <- do.call(rbind, all_tract_geometry_list)
+  
+  # Clean Population Data
+  POPULATION <- POPULATION |>
+    separate(
+      col = NAME,
+      into = c("CensusTract", "County", "State"),
+      sep = ", "
+    ) |>
+    rename("Population" = "B01003_001E") |>
+    select(-"B01003_001M") |>
+    filter(Population != "0") |>
+    mutate(CensusTract = str_replace(CensusTract, "Census Tract ", ""))
+  
+  # calling for only geoid and geometry
+  TRACT_GEOMETRY <- TRACT_GEOMETRY |>
+    select(GEOID, geometry)
+  
+  # Joining population and geometry
+  POPULATION_GEO <- POPULATION |>
+    left_join(TRACT_GEOMETRY, by = "GEOID") |>
+    st_as_sf()
+  
+  # --- STEP 6: Save the final spatial object ---
+  saveRDS(POPULATION_GEO, file = POPULATION_FILENAME)
+  message("Download, processing, and saving complete.")
+  
+} else {
+  
+  # --- Load the saved dataset if the file EXISTS ---
+  POPULATION_GEO <- readRDS(POPULATION_FILENAME)
+  message("Dataset loaded from local file (", basename(POPULATION_FILENAME), "). Skipping download.")
+}
+```
+
+### Data Cleaning Notes
+The following steps were taken to process the ACS population data obtained via `tidycensus` :
+
+- **Column Renaming and Selection**: The variable `B01003_001E` (estimate total population) is renamed to Population and `B01003_001M`(margin of error)is removed since it is not required for this project.
+- **Column Separation**: The initial `NAME` column, which combines the census tract, county, and state, is separated using the comma delimiter (, ) to isolate and correctly structure the `CensusTract`, `County`, and `State`.
+- **Tract Filtering**: To ensure a relevant population base for per-capita analysis, any census tract with a reported Population count of 0 are filtered out of the data set.
+- **Territory Filtering**: The analysis focuses on the U.S. states and the District of Columbia. The following American territories, Puerto Rico, U.S. Virgin Islands, American Samoa, Guam, and Northern Mariana Islands, are filtered out. Further analysis on these territories can be interesting future work!
+
+### Population Dataset Preview
+
+```{r}
+POPULATION_GEO |>
+  st_drop_geometry() |>
+  rename("Census Tract" = "CensusTract") |>
+  head(n =10) |> 
+  datatable(options=list(searching=FALSE, info=FALSE, dom = 'tip', 
+                         paging = FALSE),
+            rownames = FALSE) |>
+  formatRound("Population", digits = 0)
+```
+
+# Merge Data 
+
+Now I will combine the FARA and ACS population datasets. 
+```{r}
+FOOD_POP <- POPULATION_GEO |>
+  inner_join(
+    FOOD_ATLAS, by = c("GEOID" = "CensusTract",
+                       "State" = "State",
+                       "County" = "County"))
+
+FOOD_POP <- FOOD_POP |>
+  shift_geometry() |> 
+  st_transform(crs="WGS84") 
+
+FP_NOGEO <- FOOD_POP |>
+  st_drop_geometry() 
+```
+
+### Final Data Cleaning 
+```{r}
+#total number of tracts 
+total_tracts <- FP_NOGEO |>
+  count()|>
+  pull(n)
+
+#checking for duplicates
+duplicates <- FP_NOGEO |> 
+  duplicated() |>
+  sum()
+
+low_pop <- FP_NOGEO |>
+  filter(Pop2010 <= 1200) |>
+  arrange(Pop2010)
+
+special_tracts_count  <- FP_NOGEO |>
+  filter(str_starts(CensusTract, "98") | str_starts(CensusTract, "99")) |>
+  count()|>
+  pull(n)
+
+FOOD_POP <- FOOD_POP |>
+  filter(!( (Urban == 1 & Population < 1200) | (Population < 20)))
+
+FP_NOGEO <- FOOD_POP |>
+  st_drop_geometry() 
+
+#final number of tracts
+final_tract_count <- FP_NOGEO |>
+  count()|>
+  pull(n)
+
+```
+
+The following steps finalize the preparation of the final merged dataset:
+
+- Total tracts before final edits: **`r comma(total_tracts)`** 
+- **Filtering Low Population**: While tracts with zero population are filtered out during the import phase, further filtering is required to remove low-population outliers. Based on U.S. Census Bureau, the population for standard census tracts ideally ranges from 1,200 to 8,000, with an optimal target of 4,000. Therefore, the following tracts were filtered out:
+    - Tracts flagged as **urban** and having a population **less than 1,200** people.
+    - Tracts with a **less than 20 people** (regardless of urban status).
+- Total tracts after edits: **`r comma(final_tract_count)`** 
+
+### Final Merged Dataset Preview 
+```{r}
+FP_NOGEO |>
+  rename("Census Tract" = "CensusTract",
+         "Low Income" = "LowIncomeTracts",
+         "1 and 10" = "LA1and10",
+         "Half and 10" = "LAhalfand10", 
+         "1 and 20" = "LA1and20",
+         "Poverty %" = "PovertyRate",
+         "Pop 1 and 10" = "LAPOP1_10",
+         "Pop Half and 10" = "LAPOP05_10",
+         "Pop 1 and 20" = "LAPOP1_20") |>
+  head(n =10) |> 
+  datatable(options=list(searching=FALSE, info=FALSE, dom = 'tip', pageLength = 5), 
+            rownames = FALSE) |>
+  formatRound(c("Pop2010", "Pop 1 and 10","Pop Half and 10", "Pop 1 and 20","Population"), digits = 0)
+
+```
+
+# Where are the low access tracts in the US?
+The data is now ready for analysis! To kick off the EDA, I will first visualize how low food access varies across the United States. 
+
+### Interactive Low Access Map
+
+```{r}
+#| eval: false
+#| message: false
+#| warning: false
+#| include: false
+
+
+library(leaflet)
+library(sf)
+library(rmapshaper) 
+
+#---- Preparing Census Tract borders ----
+options(tigris_use_cache = TRUE) 
+
+# Download Census Tracts (2019)
+us_tracts <- tracts(year = 2019,class = "sf", cb = TRUE) |>
+  filter(!STATEFP %in% c("02", "15")) |>
+  mutate(GEOID = as.character(GEOID)) |>
+  st_transform(crs="WGS84") |>
+  select(GEOID)
+
+#letting me run without my laptop crashing
+us_tracts_simple <- ms_simplify(us_tracts , keep = 0.1, keep_shapes = TRUE)
+
+# General check 1: making sure geoid are formatted properly
+us_tracts_digits <- us_tracts |>
+  st_drop_geometry()|>
+  mutate(geoid_length = str_length(GEOID)) |>
+  count(geoid_length, sort = TRUE)
+
+#joining geo with food_pop
+leaflet_data <- us_tracts_simple |>
+  inner_join(FP_NOGEO, by = "GEOID")
+
+#checking for duplicates
+#leaflet_data |> st_drop_geometry()|> duplicated() |>sum()
+
+interactive_data <- leaflet_data |>
+  mutate(
+    label_1and10 = case_when(
+      LA1and10 == 1 & Urban == 1 ~ "Urban Low Access",
+      LA1and10 == 1 & Urban == 0 ~ "Rural Low Access",
+      TRUE ~ "No"
+    ),
+    label_half = case_when(
+      LAhalfand10 == 1 & Urban == 1 ~ "Urban Low Access",
+      LAhalfand10 == 1 & Urban == 0 ~ "Rural Low Access",
+      TRUE ~ "No"
+    ),
+    label_1and20 = case_when(
+      LA1and20 == 1 & Urban == 1 ~ "Urban Low Access",
+      LA1and20 == 1 & Urban == 0 ~ "Rural Low Access",
+      TRUE ~ "No"
+    )
+  )
+
+factpal <- colorFactor(
+  palette = c("Urban Low Access" = "#932092", "Rural Low Access" = "#0432ff"),
+  domain = c("Urban Low Access", "Rural Low Access")
+)
+
+# Map with Subsets
+leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |> 
+  
+  # Layer 1: 1 and 10 (Filtered)
+  addPolygons(
+    data = subset(interactive_data, label_1and10 != "No"), 
+    group = "LA 1 and 10",
+    fillColor = ~factpal(label_1and10),
+    fillOpacity = 0.7,
+    color = NA,      # remove borders for speed
+    popup = ~paste0("State: ", State, 
+                    "<br>County: ", County, 
+                    "<br>Tract: ", CensusTract, 
+                    "<br>Status: ", label_1and10)
+  ) |>
+  
+  # Layer 2: Half and 10 (Filtered)
+  addPolygons(
+    data = subset(interactive_data, label_half != "No"),
+    group = "LA Half and 10",
+    fillColor = ~factpal(label_half),
+    fillOpacity = 0.8,
+    color = NA,
+    popup = ~paste0("State: ", State, 
+                    "<br>County: ", County, 
+                    "<br>Tract: ", CensusTract, 
+                    "<br>Status: ", label_1and10)
+  ) |>
+  
+  # Layer 3: 1 and 20 (Filtered)
+  addPolygons(
+    data = subset(interactive_data, label_1and20 != "No"),
+    group = "LA 1 and 20",
+    fillColor = ~factpal(label_1and20),
+    fillOpacity = 0.7,
+    color = NA,
+    popup = ~paste0("State: ", State, 
+                    "<br>County: ", County, 
+                    "<br>Tract: ", CensusTract, 
+                    "<br>Status: ", label_1and10)
+  ) |>
+  
+  addLayersControl(
+    baseGroups = c("LA 1 and 10", "LA Half and 10", "LA 1 and 20"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) |>
+  
+  addLegend(
+    pal = factpal,
+    values = c("Urban Low Access", "Rural Low Access"),
+    title = "Access Status",
+    position = "bottomright"
+  )
+```
+
+### Number of Low Access Tracts by State
+*Note: `Total Tracts` represent the total number of tracts in the state.*
+```{r}
+low_access_tracts_by_state <- FP_NOGEO |>
+  group_by(State) |>
+  summarise(
+    total_half_and_10 = sum(LAhalfand10),
+    total_1_and_10 = sum(LA1and10),
+    total_1_and_20 = sum(LA1and20),
+    total_tracts = n()
+  ) |>
+  ungroup() |>
+  arrange(desc(total_1_and_10))
+
+low_access_tracts_by_state |>
+  rename("0.5 / 10 mi" = "total_half_and_10",
+         "1 / 10 mi" = "total_1_and_10",
+         "1 / 20 mi" = "total_1_and_20", 
+         "Total Tracts" = "total_tracts") |>
+  datatable(options=list(searching=FALSE, info=FALSE, dom = 'tip'), 
+            rownames = FALSE) |>
+  formatRound(c("0.5 / 10 mi", "1 / 10 mi","1 / 20 mi", "Total Tracts"), digits = 0)
+
+```
+**Findings**: Based on the 1 and 10 metric, the total count of low access census tracts is **highest in Texas, California, and Florida**, and **lowest in Vermont, Wyoming, and Alaska**.
+
+### Percent of Low Access Tracts in each State
+```{r}
+low_access_tracts_by_state_percent <- low_access_tracts_by_state |>
+  group_by(State) |>
+  summarise(
+    percent_LAhalfand10 = (total_half_and_10 / total_tracts),
+    percent_LA1and10 = (total_1_and_10 / total_tracts),
+    percent_LA1and20 = (total_1_and_20 / total_tracts)
+    ) |>
+  ungroup() |>
+  arrange(desc(percent_LA1and10)) 
+  
+low_access_tracts_by_state_percent |>
+  rename("0.5 / 10 mi" = "percent_LAhalfand10",
+         "1 / 10 mi" = "percent_LA1and10",
+         "1 / 20 mi" = "percent_LA1and20") |>
+  datatable(options=list(searching=FALSE, info=FALSE, dom = 'tip'), 
+            rownames = FALSE)|>
+  formatPercentage(c("0.5 / 10 mi", "1 / 10 mi","1 / 20 mi"), digits = 2)
+  
+```
+**Findings**: Based on the 1 and 10 metric, the percent of low access census tracts is **highest in Wyoming, South Dakota, and Mississippi**, and **lowest in New York, Vermont, and Maine**. 
+
+# How many people live in low access areas?
+
+With a broad understanding of the location and concentration of low-access tracts at the state level, we can now examine the populations residing within these areas.
+
+```{r}
+total_pop110 <- FP_NOGEO |>
+  summarise(total = sum(LAPOP1_10)) |>
+  pull(total)
+
+total_pop0510 <- FP_NOGEO |>
+  summarise(total = sum(LAPOP05_10))|>
+  pull(total)
+
+total_pop120 <- FP_NOGEO |>
+  summarise(total = sum(LAPOP1_20))|>
+  pull(total)
+```
+Even in tracts that do not meet the low access metric threshold to be labeled a "food desert," millions of individuals still live beyond reasonable distances from a supermarket. The following are the total approximate US population residing in low access areas: 
+
+- Half-and-10: **`r format_mil(total_pop0510)`**
+- 1-and-10: **`r format_mil(total_pop110)`**
+- 1-and-20: **`r format_mil(total_pop120)`**
+
+
+### State Level Low Access: Population
+*Note: `Total Population` represent the total population of the state, not an aggreated population total of low access.*
+```{r}
+LA_POP <- FP_NOGEO |>
+  group_by(State) |>
+  summarise(
+    total_half_and_10 = sum(LAPOP05_10),
+    total_1_and_10 = sum(LAPOP1_10),
+    total_1_and_20 = sum(LAPOP1_20),
+    total_population = sum(Pop2010)
+  ) |>
+  ungroup() |>
+  arrange(desc(total_1_and_10))
+
+LA_POP |>
+  rename("0.5 / 10 mi" = "total_half_and_10",
+         "1 / 10 mi" = "total_1_and_10",
+         "1 / 20 mi" = "total_1_and_20",
+         "Total Population" = "total_population") |>
+  datatable(options=list(searching=FALSE, info=FALSE, dom = 'tip'), 
+            rownames = FALSE)|>
+  formatRound(c("0.5 / 10 mi", "1 / 10 mi","1 / 20 mi", "Total Population"), digits = 0)
+
+```
+**Findings**: The population living in low-access areas (using the 1 and 10 metric) is **highest in Texas, California, and Florida**, and **lowest in Vermont, Wyoming, and Maine**. 
+
+### Visual: State Level Low Access: Population
+Visualizing population totals by state highlights Texas as the most heavily impacted region, with a low-access population nearly triple that of most other states.
+```{r}
+#| message: false
+#| results: hide
+
+us_states <- states(cb = TRUE, resolution = "20m") |>
+  shift_geometry() |> # Automatically moves AK/HI below the mainland
+  filter(NAME != "Puerto Rico") |>
+  select(NAME, geometry)
+
+state_map_pop <- us_states |>
+  left_join(LA_POP, by = c("NAME" = "State"))
+
+ggplot(state_map_pop) +
+  geom_sf(aes(fill = total_1_and_10), color = "white", size = 0.2) +
+  scale_fill_gradient(
+    low = "#f1f1f1",        
+    high = "#932092",  
+    trans = "sqrt",
+    labels = scales::label_number(suffix = "M", scale = 1e-6),
+    guide = guide_colorbar(
+      title = "Total Residents (Square Root Transformed)", 
+      title.position = "top", 
+      title.hjust = 0.5,
+      barwidth = 9,
+      barheight = 0.5
+    ) 
+  ) +
+  theme_void() +
+  labs(
+    title = "Total Population Residing in Low Food\nAccess Areas by State",
+    subtitle = "Metric: 1 mile for Urban / 10 miles for Rural",
+    caption = "Source: USDA Food Access Research Atlas"
+  ) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, size = 9, face = "italic")
+  )
+```
+
+
+### State Level Low Access: Percentage of Population
+```{r}
+#| message: false
+LA_POP_PERCENT <- LA_POP |>
+  group_by(State) |>
+  summarise(
+    percent_halfand10 = (total_half_and_10 / total_population),
+    percent_1and10 = (total_1_and_10 / total_population),
+    percent_1and20 = (total_1_and_20 / total_population)
+  ) |>
+  ungroup() |>
+  arrange(desc(percent_1and10)) 
+
+LA_POP_PERCENT |>
+  rename("0.5 / 10 mi" = "percent_halfand10",
+         "1 / 10 mi" = "percent_1and10",
+         "1 / 20 mi" = "percent_1and20") |>
+  datatable(options=list(searching=FALSE, info=FALSE, dom = 'tip'), 
+            rownames = FALSE)|>
+  formatPercentage(c("0.5 / 10 mi", "1 / 10 mi","1 / 20 mi"), digits = 2)
+```
+**Findings**: The percent of population living in low-access areas (using the 1 and 10 metric) is **highest in New Mexico, Alaska, and Georgia**, and **lowest in Vermont, New York, and California**. 
+
+
+### Visual: State Level Low Access: Percentage of Population
+Unlike the population choropleth, this visual give us standardized idea of how percent of population compares among the 50 states. Notably, while California had the second highest population living in low access, it has the third lowest percent of population. 
+```{r}
+#| message: false
+#| results: hide
+
+state_map_data <- us_states |>
+  left_join(LA_POP_PERCENT, by = c("NAME" = "State"))
+
+ggplot(state_map_data) +
+  geom_sf(aes(fill = percent_1and10), color = "white", size = 0.2) +
+  scale_fill_gradient(
+    low = "#f1f1f1",        
+    high = "#0432ff",          
+    labels = scales::label_percent(accuracy = 1), 
+    name = "% Low Access"
+  ) +
+  theme_void() +
+  labs(
+    title = "Percentage of Population with Low Food\nAccess by State",
+    subtitle = "Metric: 1 mile for Urban / 10 miles for Rural",
+    caption = "Source: USDA Food Access Research Atlas"
+  ) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, size = 9, face = "italic")
+  )
+```
+
+# Population by Census Tract
+
+```{r}
+us_low_access_rural <- FOOD_POP |>
+  filter(Urban == 0) |>
+  mutate(
+    LowAccessPop2010 = case_when(
+      LA1and20 == 1 | LA1and10 == 1 ~ Pop2010, 
+      TRUE ~ NA_real_ 
+    ),
+    LowAccessPop2019 = case_when(
+      LA1and20 == 1 | LA1and10 == 1 ~ Population, 
+      TRUE ~ NA_real_ 
+    ),
+    netchange = LowAccessPop2019 - LowAccessPop2010
+  )
+
+ggplot(us_low_access_rural) +
+  geom_sf(aes(fill = LowAccessPop2019), color = NA) +
+  scale_fill_gradient(
+    low = "white",
+    high = "#0432ff",
+    trans = "sqrt", 
+    na.value = "grey90",
+    guide = guide_colorbar(
+      title = "Population per Tract (Square Root Transformed)", 
+      title.position = "top", 
+      title.hjust = 0.5,
+      title.size = 10,
+      barwidth = 9,
+      barheight = 0.5
+    ) 
+  ) +
+  theme_void() +
+  labs(
+    title = "Total Population within Rural Low Food Access Tracts",
+    subtitle = "2019 ACS census tract population for areas defined by the 1-10 or 1-20 mile low access metric",
+    caption = "Source: USDA Food Access Research Atlas (2019),\nU.S. Census Bureau ACS B01003 for 2019"
+  ) +
+  theme(legend.position = 'bottom',
+        plot.title = element_text(hjust = 0.5, face = "bold", size = 12),
+        plot.subtitle = element_text(hjust = 0.5),
+        plot.caption = element_text(hjust = 0, size = 8, face = "italic"))
+```
+
+
+```{r}
+
+ggplot(us_low_access_rural) +
+  geom_sf(aes(fill = netchange), color = NA) +
+  scale_fill_gradient2(
+    low = "#fd9c58",        # Orange for population loss
+    mid = "white",          # White for little to no change
+    high = "#932092",       # Purple for population gain
+    midpoint = 0,           # Critical: ensures colors split at zero
+    na.value = "grey85",
+    limits = c(-1500, 1500),
+    oob = scales::squish,
+    labels = scales::label_comma(),
+    guide = guide_colorbar(
+      title = "Net Population Change", 
+      title.position = "left", 
+      title.hjust = 0.5,
+      barwidth = 11,
+      barheight = 0.5
+    ) 
+  ) +
+  theme_void() +
+  labs(
+    title = "Population Shifts in Rural Low-Access Tracts",
+    subtitle = "Net change in residents (2010 Census to 2019 ACS Estimates)",
+    caption = "Data Source: USDA Food Access Research Atlas (2019)"
+  ) +
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, size = 8, face = "italic")
+  )
+
+```
+
+### Change of Total Population in Rural Low Access Tracts
+```{r}
+rural_trend_summary <- us_low_access_rural |>
+  st_drop_geometry() |>
+  summarise(
+    `Total Population (2010)` = sum(as.numeric(LowAccessPop2010), na.rm = TRUE),
+    `Total Population (2019)` = sum(as.numeric(LowAccessPop2019), na.rm = TRUE),
+    `Net Change` = `Total Population (2019)` - `Total Population (2010)`,
+    `Percent Growth` = (`Net Change` / `Total Population (2010)`) * 100
+  )
+
+kable(rural_trend_summary, digits = 1, format.args = list(big.mark = ","), caption = "Population Growth within Rural Low-Access Tracts (2010-2019)")
+
+
+```
+
+
+# How does SNAP and vehicle access vary across the US?
+
+### Households with No Vehicle Distribution
+```{r}
+#| warning: false
+hunv_dist <- FP_NOGEO |>
+  filter(OHU2010 >= TractHUNV, OHU2010 > 0) |>
+  mutate(hunv_percent = (TractHUNV / OHU2010) * 100) |>
+  select(GEOID, State, County, OHU2010, TractHUNV, hunv_percent) |>
+  filter(!is.na(hunv_percent))
+
+hunv_mean <- hunv_dist |>
+  summarise(mean = mean(hunv_percent, na.rm = TRUE)) |>
+  pull(mean)
+
+ggplot(hunv_dist, aes(x = hunv_percent)) +
+  geom_histogram(
+    binwidth = 2,           
+    fill = "#b4e6a2",       
+    color = "white",       
+    alpha = 1
+  ) + 
+  coord_cartesian(xlim = c(0, 50)) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Households with No Vehicle by Census Tract",
+    subtitle = "Percentage of occupied housing units with no vehicle available per census tract",
+    x = "Percent of HUNV",
+    y = "Number of Census Tracts",
+    caption = "Source: USDA Food Access Research Atlas"
+  ) +
+  geom_vline(
+    aes(xintercept = hunv_mean), 
+    color = "#0432ff", linetype = "dashed", size = 1, alpha = 0.6
+  ) +
+  annotate(
+    "text", 
+    x = hunv_mean + 9, 
+    y = 12000, 
+    label = paste0("National Average: ", round(hunv_mean, 2), "%"),
+    color = "#0432ff"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 7),
+    plot.caption = element_text(hjust = 0, size = 12, face = "italic")
+  )
+```
+
+```{r}
+hunv_summary <- summary(hunv_dist$hunv_percent) |> as.array() |> t()
+
+kable(hunv_summary, caption = "Summary Statistics for No Vehicle Access(%)", digits = 2)
+```
+**Findings**: The distribution of households without vehicle access is heavily right-skewed, revealing that while most households own a vehicle, a small number of communities are almost entirely dependent on alternative transportation. 
+
+### SNAP Participation Distribution
+```{r}
+#| warning: false
+
+# Normalize SNAP numbers 
+snap_dist <- FP_NOGEO |>
+  filter(OHU2010 >= TractSNAP, OHU2010 > 0) |>
+  mutate(snap_percent = (TractSNAP / OHU2010) * 100) |>
+  select(GEOID, State, County, OHU2010, TractSNAP, snap_percent) |>
+  filter(!is.na(snap_percent))
+
+snap_mean <- snap_dist |>
+  summarise(mean = mean(snap_percent, na.rm = TRUE)) |>
+  pull(mean)
+
+ggplot(snap_dist, aes(x = snap_percent)) +
+  geom_histogram(
+    binwidth = 2,          
+    fill = "#e792e7",      
+    color = "white",        
+    alpha = 0.8
+  ) + 
+  coord_cartesian(xlim = c(0, 65)) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of SNAP Participation by Census Tract",
+    subtitle = "Percentage of households receiving SNAP benefits",
+    x = "Percent of Households on SNAP",
+    y = "Number of Census Tracts",
+    caption = "Source: USDA Food Access Research Atlas"
+  ) +
+  geom_vline(
+    aes(xintercept = snap_mean), 
+    color = "#0432ff", linetype = "dashed", size = 1, alpha = 0.6
+  ) +
+  annotate(
+    "text", 
+    x = snap_mean + 12, 
+    y = 6000, 
+    label = paste0("National Average: ", round(snap_mean, 2), "%"),
+    color = "#0432ff"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    plot.subtitle = element_text(hjust = 0.5),
+    plot.caption = element_text(hjust = 0, size = 9, face = "italic")
+  )
+```
+
+```{r}
+snap_summary <- summary(snap_dist$snap_percent) |> as.array() |> t()
+
+kable(snap_summary, caption = "Summary Statistics for SNAP Participation (%)", digits = 2)
+```
+**Findings**: Similar to the vehicle access data, the distribution of SNAP participation is notably right-skewed, indicating that while many census tracts have low levels of enrollment, there are significant outliers with very high participation rates.
+
+# Logistic Regression
+
+To bring the entire analysis together, I ran a logistic regression model to investigate how poverty rates, vehicle access, and SNAP participation influence the likelihood of a tract being classified as low-access. To ensure a more accurate comparison across different community sizes, I converted the raw counts of no-vehicle households and SNAP recipients into percentages. 
+
+```{r}
+#| warning: false
+model_data <- FP_NOGEO |>
+  select(LA1and10, PovertyRate, TractSNAP, TractHUNV, OHU2010) |>
+  mutate(snap_percent = (TractSNAP / OHU2010) * 100) |>
+  mutate(hunv_percent = (TractHUNV / OHU2010) * 100) |>
+  drop_na()
+
+log_model <- glm(
+  LA1and10 ~ PovertyRate + snap_percent + hunv_percent, 
+  data = model_data, 
+  family = "binomial"
+)
+
+log_results <- tidy(log_model, exponentiate = TRUE, conf.int = TRUE)
+
+kable(
+  log_results, 
+  digits = 3, 
+  caption = "Logistic Regression Results: Odds Ratios for Low Food Access (1 & 10 Miles)"
+)
+```
+
+### Overall Findings
+
+The logistic regression model confirms that socioeconomic factors are significant predictors of food access, though not always in the expected direction. **SNAP participation has a positive relationship with low access** (OR = 1.006, p < 0.001), meaning a 1% increase in enrollment slightly raises the likelihood of a tract being classified as low access. Conversely, **vehicle access shows a significant negative relationship** (OR = 0.938, p < 0.001). This is likely due to the high proximity of stores in dense, transit-heavy urban areas where residents may not own cars but are still physically close to supermarkets.
+
+Surprisingly, **Poverty Rate was not a significant predictor in this model** (p = 0.099). This suggests that there is more to analyze to better understand this unexpected result. For instance, a future study separating urban and rural tracts might reveal clearer, more localized findings. Additionally, further research into the specific distance metrics used to define food access could provide a more nuanced and accurate picture of how different populations experience food insecurity.
+
+# Final Summary Report: Linear Regression 
+
+### Downloading and Merging Team's Data
+```{r}
+#| message: false
+#| warning: false
+merged <- FP_NOGEO |>
+  select(GEOID, LA1and10, Population)
+
+#---- NANDA ----
+
+FAST_FILENAME <- file.path("data", "final", "nanda_eatdrink_Tract20_1990-2021_01P.csv")
+
+FAST <- read_csv(FAST_FILENAME) |>
+  filter(year == 2019) |> 
+  arrange(desc(count_fastfood)) |> 
+  rename('GEOID' = 'tract_fips20') |>
+  select(GEOID, count_fastfood)
+
+merged <- merged |>
+  left_join(FAST, by = "GEOID")
+
+merged <- merged |>
+  mutate(count_fastfood = replace_na(count_fastfood, 0)) |>
+  mutate(den_fastfood = (count_fastfood / Population) * 1000) |>
+  select(-count_fastfood, -Population)
+
+#----INCOME----  
+
+library(readxl)
+#for local
+INCOME_FILENAME <- file.path("data", "final","ACSDT5Y2018.B19013-Data.xlsm")
+
+INCOME <- read_excel(INCOME_FILENAME)
+
+INCOME <- INCOME |>
+  rename('GEOID' = 'tract')|>
+  mutate(med_income = as.numeric(med_income)) |>
+  select(GEOID, med_income)|>
+  filter(!is.na(med_income))
+
+merged <- merged |>
+  left_join(INCOME, by = "GEOID") 
+
+# ---- HEALTH ----
+library(httr)
+library(rvest)
+library(jsonlite)
+
+places_cache_file <- file.path("data", "final", "places_data_cache.csv")
+
+if (file.exists(places_cache_file)) {
+
+  places_data <- read_csv(places_cache_file)
+
+} else {
+  cat("No cache found. Downloading PLACES data from CDC...\n")
+
+  download_places_data <- function(measure, limit = 50000, offset = 0) {
+    url <- "https://data.cdc.gov/resource/cwsq-ngmh.json"
+    
+    query_url <- paste0(
+      url,
+      "?$limit=", limit,
+      "&$offset=", offset,
+      "&measureid=", measure
+    )
+    
+    response <- GET(query_url)
+    
+    if (status_code(response) == 200) {
+      data <- fromJSON(content(response, "text", encoding = "UTF-8"))
+      return(data)
+    } else {
+      warning(paste("Error downloading data for", measure, ":", status_code(response)))
+      return(NULL)
+    }
+  }
+
+  cat("Downloading diabetes data...\n")
+  diabetes_data <- list()
+  offset <- 0
+  chunk_size <- 50000
+  
+  repeat {
+    cat(paste("  Downloading records starting at", offset, "...\n"))
+    chunk <- download_places_data("DIABETES", limit = chunk_size, offset = offset)
+    
+    if (is.null(chunk)) {
+      cat("  No more data or error occurred\n")
+      break
+    }
+    if (nrow(chunk) == 0) break
+    
+    diabetes_data[[length(diabetes_data) + 1]] <- chunk
+    
+    if (nrow(chunk) < chunk_size) break
+    
+    offset <- offset + chunk_size
+  }
+  
+  cat("Downloading obesity data...\n")
+  obesity_data <- list()
+  offset <- 0
+  
+  repeat {
+    cat(paste("  Downloading records starting at", offset, "...\n"))
+    chunk <- download_places_data("OBESITY", limit = chunk_size, offset = offset)
+    
+    if (is.null(chunk)) {
+      cat("  No more data or error occurred\n")
+      break
+    }
+    if (nrow(chunk) == 0) break
+    
+    obesity_data[[length(obesity_data) + 1]] <- chunk
+    
+    if (nrow(chunk) < chunk_size) break
+    
+    offset <- offset + chunk_size
+  }
+
+  cat("Downloading food insecurity data...\n")
+  food_insecurity_data <- list()
+  offset <- 0
+  
+  repeat {
+    cat(paste("  Downloading records starting at", offset, "...\n"))
+    chunk <- download_places_data("FOODINSECURITY", limit = chunk_size, offset = offset)
+    
+    if (is.null(chunk) || length(chunk) == 0) {
+      cat("  Food insecurity data not available or no more data\n")
+      break
+    }
+    if (!is.data.frame(chunk) || nrow(chunk) == 0) break
+    
+    food_insecurity_data[[length(food_insecurity_data) + 1]] <- chunk
+    
+    if (nrow(chunk) < chunk_size) break
+    
+    offset <- offset + chunk_size
+  }
+  
+  cat("Downloading SNAP/food stamps data...\n")
+  snap_data <- list()
+  offset <- 0
+  
+  repeat {
+    cat(paste("  Downloading records starting at", offset, "...\n"))
+    chunk <- download_places_data("FOODSTAMPS", limit = chunk_size, offset = offset)
+    
+    if (is.null(chunk) || length(chunk) == 0) {
+      cat("  SNAP data not available or no more data\n")
+      break
+    }
+    if (!is.data.frame(chunk) || nrow(chunk) == 0) break
+    
+    snap_data[[length(snap_data) + 1]] <- chunk
+    
+    if (nrow(chunk) < chunk_size) break
+    
+    offset <- offset + chunk_size
+  }
+
+  cat("Downloading high blood pressure data...\n")
+  bphigh_data <- list()
+  offset <- 0
+  
+  repeat {
+    cat(paste("  Downloading records starting at", offset, "...\n"))
+    chunk <- download_places_data("BPHIGH", limit = chunk_size, offset = offset)
+    
+    if (is.null(chunk) || length(chunk) == 0) {
+      cat("  High blood pressure data not available or no more data\n")
+      break
+    }
+    if (!is.data.frame(chunk) || nrow(chunk) == 0) break
+    
+    bphigh_data[[length(bphigh_data) + 1]] <- chunk
+    
+    if (nrow(chunk) < chunk_size) break
+    
+    offset <- offset + chunk_size
+  }
+  
+  cat("Downloading high cholesterol data...\n")
+  cholesterol_data <- list()
+  offset <- 0
+  
+  repeat {
+    cat(paste("  Downloading records starting at", offset, "...\n"))
+    chunk <- download_places_data("HIGHCHOL", limit = chunk_size, offset = offset)
+    
+    if (is.null(chunk) || length(chunk) == 0) {
+      cat("  High cholesterol data not available or no more data\n")
+      break
+    }
+    if (!is.data.frame(chunk) || nrow(chunk) == 0) break
+    
+    cholesterol_data[[length(cholesterol_data) + 1]] <- chunk
+    
+    if (nrow(chunk) < chunk_size) break
+    
+    offset <- offset + chunk_size
+  }
+  
+  places_data <- bind_rows(c(diabetes_data, obesity_data, food_insecurity_data, 
+                             snap_data, bphigh_data, cholesterol_data))
+  
+  places_data <- places_data %>%
+    select(where(~ !is.list(.)))
+  
+  cat(paste("Downloaded", nrow(places_data), "records\n"))
+  
+  write_csv(places_data, places_cache_file)
+  
+}
+
+if ("tractfips" %in% names(places_data)) {
+  tract_col <- "tractfips"
+} else if ("locationid" %in% names(places_data)) {
+  tract_col <- "locationid"
+} else if ("tract_fips" %in% names(places_data)) {
+  tract_col <- "tract_fips"
+} else {
+  stop("Cannot find tract identifier column. Available columns: ", paste(names(places_data), collapse=", "))
+}
+
+health_data <- places_data %>%
+  filter(measureid %in% c("DIABETES", "OBESITY", "FOODINSECURITY", "FOODSTAMPS", 
+                          "BPHIGH", "HIGHCHOL")) %>%
+  select(any_of(c("locationname", "stateabbr", "statedesc", tract_col, "measureid", 
+                  "data_value", "totalpopulation", "total_population"))) %>%
+  rename(tractfips = all_of(tract_col))
+
+if ("totalpopulation" %in% names(health_data)) {
+  health_data <- health_data %>%
+    mutate(
+      data_value = as.numeric(data_value),
+      totalpopulation = as.numeric(totalpopulation)
+    )
+} else if ("total_population" %in% names(health_data)) {
+  health_data <- health_data %>%
+    mutate(
+      data_value = as.numeric(data_value),
+      totalpopulation = as.numeric(total_population)
+    )
+} else {
+  health_data <- health_data %>%
+    mutate(
+      data_value = as.numeric(data_value),
+      totalpopulation = NA_real_
+    )
+}
+
+health_wide <- health_data %>%
+  select(tractfips, stateabbr, measureid, data_value, totalpopulation, any_of("locationname")) %>%
+  distinct() %>%
+  pivot_wider(
+    names_from = measureid,
+    values_from = data_value,
+    id_cols = c(tractfips, stateabbr, totalpopulation, any_of("locationname"))
+  ) %>%
+  rename_with(tolower)
+
+if ("locationname" %in% names(health_wide)) {
+  health_wide <- health_wide %>%
+    mutate(location = locationname)
+} else {
+  health_wide <- health_wide %>%
+    mutate(location = NA_character_)
+}
+
+write_csv(health_wide, file.path("data", "final", "health_data_processed.csv"))
+
+cat("Success! Processed data saved to locally")
+```
+
+### Linear Regression: Diabetes
+```{r}
+#| message: false
+#| warning: false
+DIABETES <- health_wide |>
+  rename('GEOID' = 'tractfips') |>
+  select(GEOID, diabetes)
+
+MERGED_DIABETES <- merged |>
+  left_join(DIABETES, by = "GEOID") 
+
+# ---- Linear Regression for Diabetes ---- 
+library(ggplot2)
+library(ggpmisc)
+
+model_data_dia <- MERGED_DIABETES |>
+  select(diabetes, med_income, den_fastfood, LA1and10) |>
+  na.omit()
+
+model_dia <- lm(diabetes ~ med_income + den_fastfood + LA1and10, data = model_data_dia)
+
+model_data_dia$predicted <- predict(model_dia)
+
+ggplot(model_data_dia, aes(x = diabetes, y = predicted)) +
+  geom_point(alpha = 0.2, color = "#9badff") +
+  geom_abline(slope = 1, intercept = 0, color = "#0432ff", linetype = "dashed", size = 1) +
+  stat_poly_eq() + 
+  labs(title = "Actual vs Predicted Diabetes Prevalence",
+       subtitle = "Linear regression using income, fast food density,\nand food desert variables",
+       x = "Actual Diabetes Rate(%)",
+       y = "Predicted Diabetes Rate(%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, size = 9))
+```
+
+```{r}
+# Tidy the model coefficients
+tidy_model <- tidy(model_dia)
+
+# Format the numbers for presentation
+presentation_data <- tidy_model |>
+  mutate(
+    # Rename 'term' column for presentation
+    Predictor = case_when(
+      term == "(Intercept)" ~ "Intercept",
+      term == "med_income" ~ "Median Income",
+      term == "den_fastfood" ~ "Fast Food Density",
+      term == "LA1and10" ~ "Low Access (1 & 10 mi)",
+      TRUE ~ term
+    ),
+    # Round or format columns
+    Estimate = round(estimate, 5),
+    `p-value` = format.pval(p.value, digits = 3, eps = 0.001) # Better p-value formatting
+  ) |>
+  # Select and reorder columns
+  select(Predictor, Estimate, `p-value`)
+
+datatable(
+  presentation_data,
+  caption = "Linear Regression Model Results for Diabetes Prevalence",
+  # Customize the display options
+  options = list(
+    dom = 't', # Only show the table (no search, pagination, etc.)
+    pageLength = nrow(presentation_data), # Show all rows
+    autoWidth = TRUE
+  ),
+  rownames = FALSE # Remove the R row numbers
+)
+```
+
+### Linear Regression: Obesity
+```{r}
+OBESITY <- health_wide |>
+  rename('GEOID' = 'tractfips') |>
+  select(GEOID, obesity)
+
+MERGED_OBESITY <- merged |>
+  left_join(OBESITY, by = "GEOID")  
+
+# ---- Linear Regression for Obesity ---- 
+
+model_data_obesity <- MERGED_OBESITY |>
+  select(obesity, med_income, den_fastfood, LA1and10) |>
+  na.omit()
+
+model_obesity <- lm(obesity ~ med_income + den_fastfood + LA1and10, data = model_data_obesity)
+
+model_data_obesity$predicted <- predict(model_obesity)
+
+ggplot(model_data_obesity, aes(x = obesity, y = predicted)) +
+  geom_point(alpha = 0.2, color = "#9badff") +
+  geom_abline(slope = 1, intercept = 0, color = "#0432ff", linetype = "dashed", size = 1) +
+  stat_poly_eq() + 
+  labs(title = "Actual vs Predicted Obesity Prevalence",
+       subtitle = "Linear regression using income, fast food density,\nand food desert variables",
+       x = "Actual Obesity Rate(%)",
+       y = "Predicted Obesity Rate(%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, size = 9))
+```
+
+```{r}
+tidy_model_o <- tidy(model_obesity)
+
+# 2. Format the numbers for presentation
+presentation_data_o <- tidy_model_o |>
+  mutate(
+    # Rename 'term' column for presentation
+    Predictor = case_when(
+      term == "(Intercept)" ~ "Intercept",
+      term == "med_income" ~ "Median Income",
+      term == "den_fastfood" ~ "Fast Food Density",
+      term == "LA1and10" ~ "Low Access (1 & 10 mi)",
+      TRUE ~ term
+    ),
+    # Round or format columns
+    Estimate = round(estimate, 5),
+    `p-value` = format.pval(p.value, digits = 3, eps = 0.001) # Better p-value formatting
+  ) |>
+  # Select and reorder columns
+  select(Predictor, Estimate, `p-value`)
+
+# Print the interactive table
+datatable(
+  presentation_data_o,
+  caption = "Linear Regression Model Results for Obesity Prevalence",
+  # Customize the display options
+  options = list(
+    dom = 't', # Only show the table (no search, pagination, etc.)
+    pageLength = nrow(presentation_data), # Show all rows
+    autoWidth = TRUE
+  ),
+  rownames = FALSE # Remove the R row numbers
+)
+
+```
+
+### Linear Regression: Obesity (No Low Access)
+```{r}
+model_data_obesity_v2 <- MERGED_OBESITY |>
+  select(obesity, med_income, den_fastfood) |>
+  na.omit()
+
+# Create the Linear Regression Model
+model_obesity_v2 <- lm(obesity ~ med_income + den_fastfood, data = model_data_obesity_v2)
+
+model_data_obesity_v2$predicted <- predict(model_obesity_v2)
+
+ggplot(model_data_obesity_v2, aes(x = obesity, y = predicted)) +
+  geom_point(alpha = 0.2, color = "#D86ECC") +
+  geom_abline(slope = 1, intercept = 0, color = "#0432ff", linetype = "dashed", size = 1) +
+  stat_poly_eq() + 
+  labs(title = "Actual vs Predicted Obesity Prevalence",
+       subtitle = "Linear regression only using income and fast food density",
+       x = "Actual Obesity Rate(%)",
+       y = "Predicted Obesity Rate(%)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5, size = 9))
+```
+
+```{r}
+tidy_model_o2 <- tidy(model_obesity_v2)
+
+presentation_data_o2 <- tidy_model_o2 |>
+  mutate(
+    Predictor = case_when(
+      term == "(Intercept)" ~ "Intercept",
+      term == "med_income" ~ "Median Income",
+      term == "den_fastfood" ~ "Fast Food Density",
+      term == "LA1and10" ~ "Low Access (1 & 10 mi)",
+      TRUE ~ term
+    ),
+    Estimate = round(estimate, 5),
+    `p-value` = format.pval(p.value, digits = 3, eps = 0.001) # Better p-value formatting
+  ) |>
+  select(Predictor, Estimate, `p-value`)
+
+datatable(
+  presentation_data_o2,
+  caption = "Linear Regression Model Results for Obesity Prevalence",
+  # Customize the display options
+  options = list(
+    dom = 't', # Only show the table (no search, pagination, etc.)
+    pageLength = nrow(presentation_data), # Show all rows
+    autoWidth = TRUE
+  ),
+  rownames = FALSE # Remove the R row numbers
+)
+
+```
+
+
+
+
