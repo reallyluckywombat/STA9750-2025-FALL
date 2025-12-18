@@ -1,5 +1,5 @@
 ---
-title: "How does Supermarket Accessibility Vary Across the United States?"
+title: "How Does Supermarket Accessibility Vary Across the United States?"
 format: 
   html:
     theme: Flatly
@@ -59,9 +59,9 @@ if(!dir.exists(file.path("data", "final"))){
 }
 ```
 
-# USDA [Food Access Research Atlas](https://www.ers.usda.gov/data-products/food-access-research-atlas) Dataset (FARA)
+# USDA Food Access Research Atlas Dataset 
 
-The USDA recognizes that food accessibility is a complex issue influenced by factors like public transportation, household income, and vehicle availability. To account for these variables, the FARA defines **"Low Access" based on the physical distance to the nearest supermarket**. Specifically, a census tract is flagged if at least 500 people, or 33% of the population, live beyond the following thresholds:
+The USDA [Food Access Research Atlas](https://www.ers.usda.gov/data-products/food-access-research-atlas) (FARA) recognizes that food accessibility is a complex issue influenced by factors like public transportation, household income, and vehicle availability. To account for these variables, the FARA defines **"Low Access" based on the physical distance to the nearest supermarket**. Specifically, a census tract is flagged if at least 500 people, or 33% of the population, live beyond the following thresholds:
 
 - **Half-and-10**: Residents are more than 0.5 miles (Urban) or 10 miles (Rural) from a supermarket.
 - **1-and-10**: Residents are more than 1 mile (Urban) or 10 miles (Rural) from a supermarket.
@@ -133,7 +133,7 @@ FOOD_ATLAS <- FOOD_ATLAS |>
          LAPOP05_10 = replace_na(LAPOP05_10, 0),
          LAPOP1_20 = replace_na(LAPOP1_20, 0))
 ```
-The following steps were taken to prepare the FARA data:
+To ensure the Food Access Research Atlas dataset is properly structured for efficient analysis and accurate merging with American Community Survey population data, the following steps were taken:
 
 - **Column Selection**: only selected the necessary 16 columns from the original 47 to create a more focused workspace.
 
@@ -195,10 +195,18 @@ FOOD_ATLAS |>
 
 # U.S Census ACS Population Dataset
 
-### About the dataset
-[insert background information and why i chose to download this information]
+The U.S. Census Bureau’s [American Community Survey](https://www.census.gov/programs-surveys/acs/) (ACS) provides granular demographic, economic, and housing data by surveying a random sample of 3.5 million households annually. For this analysis, I imported the ACS [2019 Total Population](https://data.census.gov/table/ACSDT5Y2019.B01003?q=Population+Total&g=010XX00US$1400000) (B01003) 5-year estimates to align with the 2019 supermarket data.
+While the 2019 USDA FARA includes population figures, those metrics are based on the 2010 Decennial Census. I chose to integrate the 2019 ACS data to explore how more contemporary population counts compare to supermarket distances.
+
+::: {.callout-important}
+To maintain the integrity of the original FARA "Low Access" ratios, all subsequent analysis and statistics will utilize the 2010 Census Population unless explicitly stated otherwise. This ensures my findings remain technically consistent with the USDA’s official flagging criteria.
+:::
 
 ### Downloading Dataset
+
+To acquire the population data, I utilized the `tidycensus` package to interface with the U.S. Census Bureau API through a conditional pipeline. To optimize performance, the script is designed to only download the 2019 ACS 5-year estimates if the local RDS file is missing. Recognizing that this is a large dataset, I also included a pre-flight check: if a user lacks a Census API key, a conditional statement prints clear instructions on how to retrieve and install one, ensuring the code is accessible to other users.
+
+To import census tracts for the entire country, I implemented a loop that iterates through all state FIPS codes, specifically excluding U.S. territories to keep the analysis focused on the 50 states and D.C.. Once the loop completes, I perform a relational join to merge the demographic population counts with the spatial geometry, creating a unified dataset ready for geographic analysis.
 
 ```{r}
 #| message: false
@@ -221,17 +229,14 @@ if (Sys.getenv("CENSUS_API_KEY") == "") {
         ", call. = FALSE)
 }
 
-# --- Define the file path for the final saved object ---
 POPULATION_FILENAME <- file.path("data", "final", "us_census_population_geo.rds")
 
-# --- Only run the download/process block if the file does NOT exist ---
 if (!file.exists(POPULATION_FILENAME)) {
   
   message("File not found locally. Starting download and processing...")
   
   options(tigris_use_cache = TRUE)
   
-  # 1. Prepare FIPS codes
   fips_codes <- unique(fips_codes$state)[1:51]
   fips_codes <- fips_codes[!(fips_codes %in% c("72", "78", "60", "66", "69"))]
   
@@ -259,7 +264,7 @@ if (!file.exists(POPULATION_FILENAME)) {
   POPULATION <- do.call(rbind, all_tract_data_list)
   TRACT_GEOMETRY <- do.call(rbind, all_tract_geometry_list)
   
-  # Clean Population Data
+  # Cleaning
   POPULATION <- POPULATION |>
     separate(
       col = NAME,
@@ -270,17 +275,15 @@ if (!file.exists(POPULATION_FILENAME)) {
     select(-"B01003_001M") |>
     filter(Population != "0") |>
     mutate(CensusTract = str_replace(CensusTract, "Census Tract ", ""))
-  
-  # calling for only geoid and geometry
+
   TRACT_GEOMETRY <- TRACT_GEOMETRY |>
     select(GEOID, geometry)
-  
-  # Joining population and geometry
+
   POPULATION_GEO <- POPULATION |>
     left_join(TRACT_GEOMETRY, by = "GEOID") |>
     st_as_sf()
   
-  # --- STEP 6: Save the final spatial object ---
+  # --- save the file ---
   saveRDS(POPULATION_GEO, file = POPULATION_FILENAME)
   message("Download, processing, and saving complete.")
   
@@ -315,7 +318,7 @@ POPULATION_GEO |>
 
 # Merge Data 
 
-Now I will combine the FARA and ACS population datasets. 
+To ensure that Alaska and Hawaii are clearly visible without distorting the scale of the continental choropleth maps, I utilized the `shift_geometry()` function. Additionally, I transformed the coordinates to the WGS84 (World Geodetic System 1984) standard. This step ensures spatial consistency across both datasets and allows for a more cohesive visual representation of food access across all fifty states.
 ```{r}
 FOOD_POP <- POPULATION_GEO |>
   inner_join(
@@ -1231,7 +1234,7 @@ if ("locationname" %in% names(health_wide)) {
 
 write_csv(health_wide, file.path("data", "final", "health_data_processed.csv"))
 
-cat("Success! Processed data saved to locally")
+#cat("Success! Processed data saved to locally")
 ```
 
 ### Linear Regression: Diabetes
