@@ -69,7 +69,7 @@ The USDA [Food Access Research Atlas](https://www.ers.usda.gov/data-products/foo
 
 The dataset offers two primary lenses: "Low Income and Low Access" (LILA) and general "Low Access." For this analysis, **I focus exclusively on Low Access.** By removing the income constraint from the primary metric, I maintain better control over the variables and isolate the relationship between geography and infrastructure for more accurate findings.
 
-The USDA releases the FARA around every five years, with the most recent being the 2019 FARA. This Atlas aggregated 2019 supermarket data, 2018 ACS 5-year estimates, and 2010 US Census population data. Because of this cycle, my analysis represents a specific "snapshot" in time which is essential to keep in mind as we interpret the results.
+The USDA releases the FARA around every five years, with the most recent being the 2019 FARA. This Atlas aggregated **2019 supermarket data**, **2018 ACS 5-year estimates**, and **2010 U.S. Census population data**. Because of this cycle, my analysis represents a specific "snapshot" in time which is essential to keep in mind as we interpret the results.
 
 ### Downloading Dataset
 This code downloads and unzips the static file that the USDA offers only if not found locally. 
@@ -133,7 +133,7 @@ FOOD_ATLAS <- FOOD_ATLAS |>
          LAPOP05_10 = replace_na(LAPOP05_10, 0),
          LAPOP1_20 = replace_na(LAPOP1_20, 0))
 ```
-To ensure the Food Access Research Atlas dataset is properly structured for efficient analysis and accurate merging with American Community Survey population data, the following steps were taken:
+To ensure the FARA dataset is properly structured for efficient analysis and accurate merging with American Community Survey population data, the following steps were taken:
 
 - **Column Selection**: only selected the necessary 16 columns from the original 47 to create a more focused workspace.
 
@@ -318,7 +318,7 @@ POPULATION_GEO |>
 
 # Merge Data 
 
-To ensure that Alaska and Hawaii are clearly visible without distorting the scale of the continental choropleth maps, I utilized the `shift_geometry()` function. Additionally, I transformed the coordinates to the WGS84 (World Geodetic System 1984) standard. This step ensures spatial consistency across both datasets and allows for a more cohesive visual representation of food access across all fifty states.
+To ensure that Alaska and Hawaii are clearly visible without distorting the scale of the continental choropleth maps, I utilized the `shift_geometry()` function. Additionally, I transformed the coordinates to the **WGS84** (World Geodetic System 1984) standard. This step ensures spatial consistency across both datasets and allows for a more cohesive visual representation of food access across all fifty states.
 ```{r}
 FOOD_POP <- POPULATION_GEO |>
   inner_join(
@@ -399,12 +399,12 @@ FP_NOGEO |>
 The data is now ready for analysis! To kick off the EDA, I will first visualize how low food access varies across the United States. 
 
 ### Interactive Low Access Map
+To provide a more dynamic view of the data, I developed an interactive Leaflet map that allows users to toggle between the three primary distance metrics: **LA1and10, LAHalfand10, and LA1and20**. The goal of this visualization is to allow for rapid comparison of how each definition changes the geographic landscape of low access in real-time. This interactive feature is especially valuable when comparing the 1-and-10 and Half-and-10 metrics, where the subtle differences in tract flagging are most apparent when zooming in at the state or local level.
 
 ```{r}
-#| eval: false
+#| echo: true
 #| message: false
 #| warning: false
-#| include: false
 
 
 library(leaflet)
@@ -516,6 +516,7 @@ leaflet() |>
     position = "bottomright"
   )
 ```
+**Reflections**: During the development phase, I encountered significant performance issues when attempting to render the full-resolution geometry from the ACS population import. To prevent system crashes and ensure a smooth user experience, I opted to redownload the tract boundaries and simplify the geometries to reduce the computational load. For future projects, a more efficient approach would be to import and manage population data and spatial geometries as separate components from the start.
 
 ### Number of Low Access Tracts by State
 *Note: `Total Tracts` represent the total number of tracts in the state.*
@@ -617,7 +618,7 @@ LA_POP |>
 **Findings**: The population living in low-access areas (using the 1 and 10 metric) is **highest in Texas, California, and Florida**, and **lowest in Vermont, Wyoming, and Maine**. 
 
 ### Visual: State Level Low Access: Population
-Visualizing population totals by state highlights Texas as the most heavily impacted region, with a low-access population nearly triple that of most other states.
+Visualizing population totals by state highlights **Texas** as the most heavily impacted region, with a low-access population nearly triple that of most other states.
 ```{r}
 #| message: false
 #| results: hide
@@ -685,7 +686,7 @@ LA_POP_PERCENT |>
 
 
 ### Visual: State Level Low Access: Percentage of Population
-Unlike the population choropleth, this visual give us standardized idea of how percent of population compares among the 50 states. Notably, while California had the second highest population living in low access, it has the third lowest percent of population. 
+Unlike the population choropleth, this visualization give us a standardized view of how percent of population compares among the 50 states. Notably, while **California** had the second highest population living in low access, it has the third lowest percent of population. 
 ```{r}
 #| message: false
 #| results: hide
@@ -715,7 +716,9 @@ ggplot(state_map_data) +
   )
 ```
 
-# Population by Census Tract
+# How does population change over time in low access tracts?
+
+To capture a more contemporary snapshot of the residents living within low-access areas, this choropleth utilizes **ACS 2019 5-Year Estimate population** figures. It is important to reiterate that being located within a "low-access tract" does not imply the entire population lives with low food access; rather, this visual serves to highlight the scale of the potential challenge.
 
 ```{r}
 us_low_access_rural <- FOOD_POP |>
@@ -759,8 +762,12 @@ ggplot(us_low_access_rural) +
         plot.subtitle = element_text(hjust = 0.5),
         plot.caption = element_text(hjust = 0, size = 8, face = "italic"))
 ```
+**Findings**: The map reveals a high concentration of low access rural tracts across the **Western United States** and the **Great Plains**, where vast land areas naturally create significant distance barriers for residents. Additionally not only are these tracts extremely large in geographic size but also contain lower than average population densities. These factors combine to create a unique regional landscape where the number of supermarkets are not as near compared to urban areas. 
 
 
+### Net Change in Population in Rural Low Access Tracts
+
+By comparing the 2010 Census to the 2019 ACS Estimates, we can identify regions where the population has either intensified or receded.
 ```{r}
 
 ggplot(us_low_access_rural) +
@@ -796,6 +803,10 @@ ggplot(us_low_access_rural) +
   )
 
 ```
+Because the majority of net changes fell within a range of **+/- 3,000 residents**, with the exception of one outlier of 4,000, I utilized the `scales::squish` function to manually adjust the legend’s range. This increased the visual contrast, allowing for a clearer identification of demographic trends.
+
+The resulting visualization reveals that many of the deep purple tracts, indicating growth, are smaller in geographic size, while the orange-shaded tracts, indicating decline, are significantly larger. This spatial pattern potentially indicates a trend where residents are moving toward more densely populated areas over time, even within areas characterized by low food access.
+
 
 ### Change of Total Population in Rural Low Access Tracts
 ```{r}
@@ -809,10 +820,8 @@ rural_trend_summary <- us_low_access_rural |>
   )
 
 kable(rural_trend_summary, digits = 1, format.args = list(big.mark = ","), caption = "Population Growth within Rural Low-Access Tracts (2010-2019)")
-
-
 ```
-
+**Findings**: The overall growth rate of -0.5% confirms the minimal population shift within rural low access tracts, as shown in the Population Shift visual.   
 
 # How does SNAP and vehicle access vary across the US?
 
@@ -928,7 +937,7 @@ kable(snap_summary, caption = "Summary Statistics for SNAP Participation (%)", d
 
 # Logistic Regression
 
-To bring the entire analysis together, I ran a logistic regression model to investigate how poverty rates, vehicle access, and SNAP participation influence the likelihood of a tract being classified as low-access. To ensure a more accurate comparison across different community sizes, I converted the raw counts of no-vehicle households and SNAP recipients into percentages. 
+To bring the entire analysis together, I ran a logistic regression model to investigate how poverty rates, vehicle access, and SNAP participation influence the likelihood of a tract being classified as low access. To ensure a more accurate comparison across different community sizes, I converted the raw counts of no-vehicle households and SNAP recipients into percentages. 
 
 ```{r}
 #| warning: false
