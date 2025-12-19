@@ -399,7 +399,7 @@ FP_NOGEO |>
 The data is now ready for analysis! To kick off the EDA, I will first visualize how low food access varies across the United States. 
 
 ### Interactive Low Access Map
-To provide a more dynamic view of the data, I developed an interactive Leaflet map that allows users to toggle between the three primary distance metrics: **LA1and10, LAHalfand10, and LA1and20**. The goal of this visualization is to allow for rapid comparison of how each definition changes the geographic landscape of low access in real-time. This interactive feature is especially valuable when comparing the 1-and-10 and Half-and-10 metrics, where the subtle differences in tract flagging are most apparent when zooming in at the state or local level.
+To provide a more dynamic view of the data, I developed an interactive Leaflet map that allows users to toggle between the three primary distance metrics: `LA1and10`, `LAHalfand10`, and `LA1and20`. The goal of this visualization is to allow for rapid comparison of how each definition changes the geographic landscape of low access in real-time. This interactive feature is especially valuable when comparing the 1-and-10 and Half-and-10 metrics, where the subtle differences in tract flagging are most apparent when zooming in at the state or local level.
 
 ```{r}
 #| echo: true
@@ -968,7 +968,11 @@ The logistic regression model confirms that socioeconomic factors are significan
 
 Surprisingly, **Poverty Rate was not a significant predictor in this model** (p = 0.099). This suggests that there is more to analyze to better understand this unexpected result. For instance, a future study separating urban and rural tracts might reveal clearer, more localized findings. Additionally, further research into the specific distance metrics used to define food access could provide a more nuanced and accurate picture of how different populations experience food insecurity.
 
-# Final Summary Report: Linear Regression 
+# Final Summary Report: Linear Regression
+
+This section includes the code for the OLS Models, but for further analysis and findings, please read the [Green Apple's Final Summary](https://festrada0817.github.io/STA9750-2025-FALL/FinalProjectPresentation2025.html#overarching-and-analytical-questions) where our team shares our collaborative work and findings for our overarching question.
+
+To combine all of our analysis together, we are using a linear regression to model the interaction among income, fast food availability, and low access data to determine their role in the prevalence of diabetes. We can determine the statistical significance (or insignificance) of each variable and its relative weight in the relationship.
 
 ### Downloading and Merging Team's Data
 ```{r}
@@ -1386,6 +1390,8 @@ datatable(
 ```
 
 ### Linear Regression: Obesity (No Low Access)
+
+We then create another OLS model where we eliminate the low access variable to see how the relationship changes between the variables and the obesity rate. We use r-squared to measure how much of the relationship can be accounted for by the variables and if that number changes between the models. This can help us evaluate whether low access is in fact implicated, and to what extent it may play a role.
 ```{r}
 model_data_obesity_v2 <- MERGED_OBESITY |>
   select(obesity, med_income, den_fastfood) |>
